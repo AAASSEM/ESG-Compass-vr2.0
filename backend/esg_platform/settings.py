@@ -72,7 +72,7 @@ ROOT_URLCONF = 'esg_platform.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'dist')],
+        'DIRS': [os.path.join(BASE_DIR, 'frontend-react' ,'dist')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
