@@ -1473,7 +1473,7 @@ const Reports = () => {
                 type="button"
                 variant="outline"
                 onClick={() => window.location.href = '/onboard'}
-                className="text-brand-blue border-brand-blue hover:bg-brand-blue hover:text-white"
+                className="text-brand-blue border-brand-blue hover:bg-brand-blue hover:text-white px-4 py-2 text-sm"
               >
                 <i className="fa-solid fa-clipboard-check mr-2"></i>
                 Start Assessment
@@ -1484,6 +1484,7 @@ const Reports = () => {
                   type="button"
                   variant="outline"
                   onClick={() => window.location.href = '/tasks'}
+                  className="px-4 py-2 text-sm"
                 >
                   <i className="fa-solid fa-tasks mr-2"></i>
                   View Tasks
@@ -1492,6 +1493,7 @@ const Reports = () => {
                   type="button"
                   variant="primary"
                   onClick={() => setShowNoDataModal(false)}
+                  className="px-4 py-2 text-sm"
                 >
                   Got It
                 </Button>

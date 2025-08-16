@@ -58,6 +58,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -69,10 +70,17 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'esg_platform.urls'
 
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
+#  HEAD
         'DIRS': [os.path.join(BASE_DIR, 'frontend-react' ,'dist')],
+
+#         'DIRS': [
+#             os.path.join(BASE_DIR, '../frontend-react/dist'),  # Ensure this points to the correct build directory
+#         ],
+#  e4e34ad (Save local changes before rebase)
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -83,6 +91,16 @@ TEMPLATES = [
             ],
         },
     },
+]
+
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Important: Update STATICFILES_DIRS to include the dist/assets directory
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, '..', 'frontend-react', 'dist', 'assets'),  # Vite built assets
+    os.path.join(BASE_DIR, '..', 'frontend-react', 'dist'),  # Root dist for other files
 ]
 
 WSGI_APPLICATION = 'esg_platform.wsgi.application'
@@ -120,13 +138,7 @@ TIME_ZONE = 'Asia/Dubai'
 USE_I18N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = '/assets/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-# Tell Django where to find static files (assets folder)
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'dist', 'assets'),
-]
+
 
 # Media files
 MEDIA_URL = '/media/'
@@ -239,6 +251,9 @@ LOGGING = {
         },
     },
 }
+
+LOGS_DIR = Path(BASE_DIR) / "logs"
+LOGS_DIR.mkdir(exist_ok=True)
 
 # ESG Platform specific settings
 ESG_FRAMEWORKS = {

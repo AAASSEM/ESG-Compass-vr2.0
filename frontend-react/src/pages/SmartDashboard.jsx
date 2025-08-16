@@ -569,8 +569,20 @@ const SmartDashboard = () => {
       }
     }
     
-    console.log('🔍 CALCULATE ESG: === FINAL SCORES ===', scores);
-    return scores;
+    // If score is 50 or less, show 0
+    const adjustedScores = {
+      environmental: scores.environmental <= 50 ? 0 : scores.environmental,
+      social: scores.social <= 50 ? 0 : scores.social,
+      governance: scores.governance <= 50 ? 0 : scores.governance,
+      overall: scores.overall <= 50 ? 0 : scores.overall
+    };
+    
+    console.log('🔍 SCORE ADJUSTMENT: Original vs Adjusted:', {
+      original: scores,
+      adjusted: adjustedScores
+    });
+    console.log('🔍 CALCULATE ESG: === FINAL SCORES ===', adjustedScores);
+    return adjustedScores;
   };
 
   const esgScores = React.useMemo(() => {
@@ -738,14 +750,6 @@ const SmartDashboard = () => {
             )}
           </div>
           <div className="flex items-center space-x-4">
-            <Button 
-              variant="outline"
-              onClick={() => refreshData()}
-              loading={isRefreshing}
-            >
-              <i className="fas fa-sync-alt mr-2"></i>
-              Refresh API Data
-            </Button>
             <div className="flex items-center space-x-2 text-sm">
               <span className="text-text-muted">Data Source:</span>
               <select 
@@ -770,7 +774,7 @@ const SmartDashboard = () => {
               <i className="fa-solid fa-chart-pie text-brand-green"></i>
             </div>
             <div className="text-3xl font-bold mb-2 text-brand-green">
-              {esgScores.overall > 0 ? `${esgScores.overall.toFixed(2)}%` : '–'}
+              {esgScores.overall > 0 ? `${Math.round(esgScores.overall)}%` : '–'}
             </div>
             <div className="text-xs text-text-muted">
               {esgScores.overall > 0 ? 'Calculated from extracted data' : 'No data extracted yet'}
@@ -783,7 +787,7 @@ const SmartDashboard = () => {
               <i className="fa-solid fa-leaf text-green-500"></i>
             </div>
             <div className="text-3xl font-bold mb-2 text-green-500">
-              {esgScores.environmental > 0 ? `${esgScores.environmental}%` : '–'}
+              {esgScores.environmental > 0 ? `${Math.round(esgScores.environmental)}%` : '–'}
             </div>
             <div className="text-xs text-green-400">
               {Object.keys(getFilteredMetrics()).filter(m => ['energy_consumption', 'water_usage', 'waste_generated', 'carbon_emissions', 'renewable_energy'].includes(m)).length} metrics tracked
@@ -796,7 +800,7 @@ const SmartDashboard = () => {
               <i className="fa-solid fa-users text-blue-500"></i>
             </div>
             <div className="text-3xl font-bold mb-2 text-blue-500">
-              {esgScores.social > 0 ? `${esgScores.social}%` : '–'}
+              {esgScores.social > 0 ? `${Math.round(esgScores.social)}%` : '–'}
             </div>
             <div className="text-xs text-blue-400">
               {Object.keys(getFilteredMetrics()).filter(m => ['satisfaction_score', 'training_hours', 'safety_incidents', 'total_employees', 'diversity_ratio', 'employee_satisfaction_score'].includes(m)).length} metrics tracked
@@ -809,7 +813,7 @@ const SmartDashboard = () => {
               <i className="fa-solid fa-shield-halved text-teal-500"></i>
             </div>
             <div className="text-3xl font-bold mb-2 text-teal-500">
-              {esgScores.governance > 0 ? `${esgScores.governance}%` : '–'}
+              {esgScores.governance > 0 ? `${Math.round(esgScores.governance)}%` : '–'}
             </div>
             <div className="text-xs text-teal-400">
               {Object.keys(getFilteredMetrics()).filter(m => ['compliance_score', 'board_meetings', 'audit_findings', 'policy_updates', 'policy_compliance'].includes(m)).length} metrics tracked

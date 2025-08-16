@@ -413,3 +413,5 @@ For questions and support:
 **Note**: The Universal File Parser System is designed to work seamlessly with the existing ESG platform. It automatically enhances the dashboard with real data extracted from uploaded files, making the entire system more valuable and functional for ESG tracking and reporting.
 
 
+
+

@@ -156,6 +156,17 @@ const Dashboard = () => {
       totalTasks.environmental + totalTasks.social + totalTasks.governance
     );
 
+    // If score is 50 or less, show 0
+    const adjustedEnvironmental = environmental <= 50 ? 0 : environmental;
+    const adjustedSocial = social <= 50 ? 0 : social;
+    const adjustedGovernance = governance <= 50 ? 0 : governance;
+    const adjustedOverall = overall <= 50 ? 0 : overall;
+    
+    console.log('🔍 SCORE ADJUSTMENT: Original vs Adjusted:', {
+      original: { environmental, social, governance, overall },
+      adjusted: { environmental: adjustedEnvironmental, social: adjustedSocial, governance: adjustedGovernance, overall: adjustedOverall }
+    });
+
     console.log('🔍 TASK CALC: === DETAILED TASK-BASED CALCULATION ===');
     console.log('🔍 TASK CALC: Total tasks breakdown:', totalTasks);
     console.log('🔍 TASK CALC: Completed tasks breakdown:', completedTasks);
@@ -172,7 +183,7 @@ const Dashboard = () => {
       console.error('🚨 This is the wrong calculation - should use file data instead!');
     }
 
-    return { environmental, social, governance, overall };
+    return { environmental: adjustedEnvironmental, social: adjustedSocial, governance: adjustedGovernance, overall: adjustedOverall };
   };
 
   // Get progress from API data only - include user ID to force recalculation on user change
@@ -216,12 +227,16 @@ const Dashboard = () => {
       const overall = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
       
       const result = {
-        environmental: envScore,
-        social: socialScore, 
-        governance: govScore,
-        overall: overall
+        environmental: envScore <= 50 ? 0 : envScore,
+        social: socialScore <= 50 ? 0 : socialScore, 
+        governance: govScore <= 50 ? 0 : govScore,
+        overall: overall <= 50 ? 0 : overall
       };
       
+      console.log('🔍 FILE SCORE ADJUSTMENT: Original vs Adjusted:', {
+        original: { environmental: envScore, social: socialScore, governance: govScore, overall },
+        adjusted: result
+      });
       console.log('🎯 DASHBOARD: FINAL FILE-BASED RESULT:', result);
       console.log('🔍 DASHBOARD: === If you see 58.33%, it\'s NOT from here ===');
       return result;
@@ -467,7 +482,7 @@ const Dashboard = () => {
     
     // Fallback
     return [
-      { name: 'Task Progress', value: `${realProgress.overall}%`, change: '0%', status: 'stable', description: 'overall completion' }
+      { name: 'Task Progress', value: `${Math.round(realProgress.overall)}%`, change: '0%', status: 'stable', description: 'overall completion' }
     ];
   };
 
@@ -737,10 +752,10 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
             <h3 className="text-sm font-medium text-text-muted">Overall ESG Score</h3>
             <i className="fa-solid fa-chart-pie text-brand-green"></i>
           </div>
-          <div className="text-3xl font-bold mb-2" style={{
+          <div className="text-2xl font-bold mb-2" style={{
             color: realProgress.overall > 0 ? '#2EC57D' : 'rgba(248,249,250,0.72)'
           }}>
-            {realProgress.overall > 0 ? realProgress.overall : '–'}%
+            {realProgress.overall > 0 ? Math.round(realProgress.overall) : '–'}%
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs" style={{
@@ -756,10 +771,10 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
             <h3 className="text-sm font-medium text-text-muted">Environmental</h3>
             <i className="fa-solid fa-leaf text-brand-green"></i>
           </div>
-          <div className="text-3xl font-bold mb-2" style={{
+          <div className="text-2xl font-bold mb-2" style={{
             color: realProgress.environmental > 0 ? '#2EC57D' : 'rgba(248,249,250,0.72)'
           }}>
-            {realProgress.environmental > 0 ? realProgress.environmental : '–'}%
+            {realProgress.environmental > 0 ? Math.round(realProgress.environmental) : '–'}%
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs" style={{
@@ -775,10 +790,10 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
             <h3 className="text-sm font-medium text-text-muted">Social</h3>
             <i className="fa-solid fa-users text-brand-blue"></i>
           </div>
-          <div className="text-3xl font-bold mb-2" style={{
+          <div className="text-2xl font-bold mb-2" style={{
             color: realProgress.social > 0 ? '#3DAEFF' : 'rgba(248,249,250,0.72)'
           }}>
-            {realProgress.social > 0 ? realProgress.social : '–'}%
+            {realProgress.social > 0 ? Math.round(realProgress.social) : '–'}%
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs" style={{
@@ -794,10 +809,10 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
             <h3 className="text-sm font-medium text-text-muted">Governance</h3>
             <i className="fa-solid fa-shield-halved text-brand-teal"></i>
           </div>
-          <div className="text-3xl font-bold mb-2" style={{
+          <div className="text-2xl font-bold mb-2" style={{
             color: realProgress.governance > 0 ? '#20C5C5' : 'rgba(248,249,250,0.72)'
           }}>
-            {realProgress.governance > 0 ? realProgress.governance : '–'}%
+            {realProgress.governance > 0 ? Math.round(realProgress.governance) : '–'}%
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs" style={{
@@ -966,7 +981,7 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-text-high">Environmental Score</span>
-                      <span className="text-sm text-brand-green">{realProgress.environmental}%</span>
+                      <span className="text-sm text-brand-green">{Math.round(realProgress.environmental)}%</span>
                     </div>
                     <div className="w-full bg-white/10 rounded-full h-2">
                       <div className="bg-brand-green h-2 rounded-full" style={{ width: `${realProgress.environmental}%` }}></div>
@@ -978,7 +993,7 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-text-high">Social Score</span>
-                      <span className="text-sm text-brand-blue">{realProgress.social}%</span>
+                      <span className="text-sm text-brand-blue">{Math.round(realProgress.social)}%</span>
                     </div>
                     <div className="w-full bg-white/10 rounded-full h-2">
                       <div className="bg-brand-blue h-2 rounded-full" style={{ width: `${realProgress.social}%` }}></div>
@@ -990,7 +1005,7 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-text-high">Governance Score</span>
-                      <span className="text-sm text-brand-teal">{realProgress.governance}%</span>
+                      <span className="text-sm text-brand-teal">{Math.round(realProgress.governance)}%</span>
                     </div>
                     <div className="w-full bg-white/10 rounded-full h-2">
                       <div className="bg-brand-teal h-2 rounded-full" style={{ width: `${realProgress.governance}%` }}></div>
@@ -1095,8 +1110,8 @@ const TrackerContent = ({ selectedTab, realProgress, company, tasks }) => {
         >
           <i className={`fas ${tabIcon} text-3xl`} style={{ color: tabColor }}></i>
         </div>
-        <h2 className="text-3xl font-bold text-text-high mb-2 capitalize">{selectedTab}</h2>
-        <div className="text-4xl font-bold mb-4" style={{ color: tabColor }}>
+        <h2 className="text-2xl font-bold text-text-high mb-2 capitalize">{selectedTab}</h2>
+        <div className="text-3xl font-bold mb-4" style={{ color: tabColor }}>
           {tabProgress > 0 ? `${tabProgress}%` : '–%'}
         </div>
         <p className="text-text-muted">

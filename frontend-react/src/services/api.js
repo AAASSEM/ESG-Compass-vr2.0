@@ -28,10 +28,15 @@ function getCookie(name) {
 // Request interceptor to add auth token and CSRF token
 api.interceptors.request.use(
   (config) => {
-    // Try multiple possible token keys for maximum compatibility
-    const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // Check if we're in demo mode
+    const demoMode = localStorage.getItem('demo_mode');
+    
+    if (!demoMode) {
+      // Only add auth token if not in demo mode
+      const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
     
     // Add CSRF token for state-changing requests

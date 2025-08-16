@@ -1,31 +1,131 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { toast } from 'react-toastify';
 
 const Home = () => {
+  const { user, loginDemo, logout } = useAuth();
+  const navigate = useNavigate();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleDemoRequest = () => {
+    try {
+      // If user is already logged in, log them out first
+      if (user) {
+        logout();
+      }
+      
+      // Small delay to ensure logout completes, then log in as demo user
+      setTimeout(() => {
+        try {
+          const result = loginDemo();
+          if (result && result.success) {
+            toast.success('Demo mode activated!');
+            navigate('/dashboard');
+          } else {
+            toast.error('Demo login failed');
+          }
+        } catch (error) {
+          console.error('Demo login error:', error);
+          toast.error('Demo login failed');
+        }
+      }, 100);
+      
+    } catch (error) {
+      console.error('Demo request error:', error);
+      toast.error('Demo login failed');
+    }
+  };
+
+  const handleLoginClick = () => {
+    if (user) {
+      logout();
+    }
+    navigate('/login');
+  };
   return (
     <div className="min-h-screen text-text-high font-inter bg-gradient-to-br from-[#131A2C] via-[#1C1330] to-[#131A2C]">
       {/* Header */}
       <header className="relative z-50 px-6 py-6">
         <nav className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+          <Link to="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
             <div className="w-10 h-10 rounded-xl bg-brand-green flex items-center justify-center">
               <i className="fa-solid fa-compass text-white text-lg"></i>
             </div>
             <span className="text-xl font-bold text-text-high">ESG Compass</span>
-          </div>
+          </Link>
           
           <div className="hidden md:flex items-center space-x-8">
             <span className="text-text-muted hover:text-text-high transition-colors cursor-pointer">Features</span>
             <span className="text-text-muted hover:text-text-high transition-colors cursor-pointer">Pricing</span>
             <span className="text-text-muted hover:text-text-high transition-colors cursor-pointer">Resources</span>
-            <Link to="/login" className="px-4 py-2 text-text-muted hover:text-text-high transition-colors">Login</Link>
-            <Link to="/login" className="px-6 py-2 bg-brand-green text-white rounded-lg hover:bg-opacity-90 transition-all block text-center">Request Demo</Link>
+            <button onClick={handleLoginClick} className="px-4 py-2 text-text-muted hover:text-text-high transition-colors">Login</button>
+            <button onClick={handleDemoRequest} className="px-6 py-2 bg-brand-green text-white rounded-lg hover:bg-opacity-90 transition-all">Request Demo</button>
           </div>
           
-          <button className="md:hidden text-text-high">
-            <i className="fa-solid fa-bars text-xl"></i>
+          <button 
+            onClick={toggleMobileMenu}
+            className="md:hidden text-text-high p-2 rounded-lg hover:bg-white/10 transition-colors"
+            aria-label="Toggle mobile menu"
+          >
+            <i className={`fa-solid ${isMobileMenuOpen ? 'fa-times' : 'fa-bars'} text-xl`}></i>
           </button>
         </nav>
+
+        {/* Mobile Menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden absolute top-full left-0 right-0 bg-[#131A2C]/95 backdrop-blur-md border-t border-white/10">
+            <div className="px-6 py-4 space-y-2 max-w-7xl mx-auto">
+              <button 
+                onClick={closeMobileMenu}
+                className="flex items-center space-x-3 px-4 py-3 rounded-lg text-text-muted hover:text-text-high hover:bg-brand-green/10 transition-colors font-medium w-full text-left"
+              >
+                <i className="fa-solid fa-star"></i>
+                <span>Features</span>
+              </button>
+              
+              <button 
+                onClick={closeMobileMenu}
+                className="flex items-center space-x-3 px-4 py-3 rounded-lg text-text-muted hover:text-text-high hover:bg-brand-green/10 transition-colors font-medium w-full text-left"
+              >
+                <i className="fa-solid fa-dollar-sign"></i>
+                <span>Pricing</span>
+              </button>
+              
+              <button 
+                onClick={closeMobileMenu}
+                className="flex items-center space-x-3 px-4 py-3 rounded-lg text-text-muted hover:text-text-high hover:bg-brand-green/10 transition-colors font-medium w-full text-left"
+              >
+                <i className="fa-solid fa-book"></i>
+                <span>Resources</span>
+              </button>
+              
+              <button 
+                onClick={() => { closeMobileMenu(); handleLoginClick(); }}
+                className="flex items-center space-x-3 px-4 py-3 rounded-lg text-text-muted hover:text-text-high hover:bg-brand-green/10 transition-colors font-medium w-full text-left"
+              >
+                <i className="fa-solid fa-sign-in-alt"></i>
+                <span>Login</span>
+              </button>
+              
+              <button 
+                onClick={() => { closeMobileMenu(); handleDemoRequest(); }}
+                className="flex items-center space-x-3 px-4 py-3 rounded-lg bg-brand-green text-white hover:bg-opacity-90 transition-colors font-medium w-full text-left"
+              >
+                <i className="fa-solid fa-play"></i>
+                <span>Request Demo</span>
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
@@ -48,13 +148,13 @@ const Home = () => {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Link 
-                    to="/login"
-                    className="px-8 py-4 bg-brand-green text-white font-semibold rounded-xl hover:bg-opacity-90 transition-all transform hover:scale-105 text-center"
+                  <button 
+                    onClick={handleDemoRequest}
+                    className="px-8 py-4 bg-brand-green text-white font-semibold rounded-xl hover:bg-opacity-90 transition-all transform hover:scale-105"
                   >
                     <i className="fa-solid fa-play mr-2"></i>
                     Request Demo
-                  </Link>
+                  </button>
                   <button className="px-8 py-4 border border-white/20 text-text-high font-semibold rounded-xl hover:bg-white/5 transition-all">
                     Learn More
                   </button>

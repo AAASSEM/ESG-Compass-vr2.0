@@ -647,12 +647,7 @@ const Tracker = () => {
       <div className="max-w-7xl mx-auto">
         {/* Page Header */}
         <div className="mb-8">
-          <div className="flex items-center space-x-3 mb-4">
-            <button className="text-text-muted hover:text-text-high transition-colors">
-              <i className="fa-solid fa-arrow-left"></i>
-            </button>
-            <h1 className="text-3xl font-bold">Progress Tracker</h1>
-          </div>
+          <h1 className="text-3xl font-bold mb-4">Progress Tracker</h1>
           <p className="text-text-muted text-lg">Track your ESG data completion and evidence upload progress</p>
         </div>
 
@@ -671,7 +666,7 @@ const Tracker = () => {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-brand-blue">{progress.dataProgress.overall}%</div>
+                <div className="text-xl md:text-3xl font-bold text-brand-blue px-2">{progress.dataProgress.overall}%</div>
                 <div className="text-sm text-text-muted">
                   {progress.dataProgress.completed} of {progress.dataProgress.total} fields
                 </div>
@@ -716,7 +711,7 @@ const Tracker = () => {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-brand-teal">{progress.evidenceProgress.overall}%</div>
+                <div className="text-xl md:text-3xl font-bold text-brand-teal px-2">{progress.evidenceProgress.overall}%</div>
                 <div className="text-sm text-text-muted">
                   {progress.evidenceProgress.completed} of {progress.evidenceProgress.total} files
                 </div>
