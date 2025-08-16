@@ -1,15 +1,24 @@
+// frontend-react/vite.config.js
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: "/", // Change base to root since Django will serve from root
+  base: "/static/", // This should match Django's STATIC_URL
   build: {
-    outDir: "dist", // Build to frontend-react/dist
+    outDir: "dist",
     emptyOutDir: true,
     assetsDir: "assets",
-    manifest: true,
+    manifest: false, // Set to false for simpler deployment
+    rollupOptions: {
+      output: {
+        // Ensure consistent file naming
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
+    }
   },
   server: {
     port: 8080,
@@ -19,22 +28,8 @@ export default defineConfig({
         target: "http://localhost:8000",
         changeOrigin: true,
         secure: false,
-        configure: (proxy, options) => {
-          proxy.on("error", (err, req, res) => {
-            console.log("proxy error", err);
-          });
-          proxy.on("proxyReq", (proxyReq, req, res) => {
-            console.log("Sending Request to the Target:", req.method, req.url);
-          });
-          proxy.on("proxyRes", (proxyRes, req, res) => {
-            console.log(
-              "Received Response from the Target:",
-              proxyRes.statusCode,
-              req.url
-            );
-          });
-        },
       },
     },
   },
-});
+})
+
