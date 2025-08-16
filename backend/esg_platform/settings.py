@@ -1,6 +1,4 @@
-"""
-Django settings for esg_platform project.
-"""
+# settings.py - Updated for Render deployment
 
 import os
 from pathlib import Path
@@ -14,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=bool)  # Default to False for production
 
 # ALLOWED_HOSTS configuration for production deployment
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,testserver').split(',')
@@ -58,11 +56,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # IMPORTANT: Must be after SecurityMiddleware
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',  # Re-enabled with proper CSRF_TRUSTED_ORIGINS
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -70,17 +68,13 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'esg_platform.urls'
 
-
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-#  HEAD
-        'DIRS': [os.path.join(BASE_DIR, 'frontend-react' ,'dist')],
-
-#         'DIRS': [
-#             os.path.join(BASE_DIR, '../frontend-react/dist'),  # Ensure this points to the correct build directory
-#         ],
-#  e4e34ad (Save local changes before rebase)
+        'DIRS': [
+            os.path.join(BASE_DIR, 'staticfiles'),  # For production
+            os.path.join(BASE_DIR, '..', 'frontend-react', 'dist'),  # For development
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -97,11 +91,21 @@ TEMPLATES = [
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Important: Update STATICFILES_DIRS to include the dist/assets directory
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, '..', 'frontend-react', 'dist', 'assets'),  # Vite built assets
-    os.path.join(BASE_DIR, '..', 'frontend-react', 'dist'),  # Root dist for other files
-]
+# IMPORTANT: Configure STATICFILES_DIRS based on environment
+if DEBUG:
+    STATICFILES_DIRS = [
+        os.path.join(BASE_DIR, '..', 'frontend-react', 'dist'),
+    ]
+else:
+    # In production, don't use STATICFILES_DIRS if files are already in STATIC_ROOT
+    STATICFILES_DIRS = []
+
+# WhiteNoise configuration for serving static files in production
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG  # Only auto-refresh in development
+
+# Ensure static files are compressed and cached properly
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 WSGI_APPLICATION = 'esg_platform.wsgi.application'
 
@@ -138,8 +142,6 @@ TIME_ZONE = 'Asia/Dubai'
 USE_I18N = True
 USE_TZ = True
 
-
-
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -150,31 +152,21 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # CSRF settings - Critical for Django 4.0+
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8080',
-    'http://localhost:8000', 
-    'http://localhost:3000',
-    'http://localhost:3001',  # Added for new backend port
+    'http://localhost:8000',
     'http://127.0.0.1:8080',
     'http://127.0.0.1:8000',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:3001',  # Added for new backend port
     'https://esg-compass-v2.onrender.com',  # Production Render URL
 ]
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:8000,http://127.0.0.1:8000,http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,https://esg-compass-v2.onrender.com').split(',')
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
-CORS_ALLOWED_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'https://esg-compass-v2.onrender.com',
 ]
+CORS_ALLOW_CREDENTIALS = True
 
 # Django REST Framework
 REST_FRAMEWORK = {
@@ -228,11 +220,6 @@ LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
-        },
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
@@ -240,18 +227,19 @@ LOGGING = {
     },
     'loggers': {
         'django': {
-            'handlers': ['file', 'console'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': True,
         },
         'esg_platform': {
-            'handlers': ['file', 'console'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': True,
         },
     },
 }
 
+# Create logs directory if it doesn't exist
 LOGS_DIR = Path(BASE_DIR) / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
@@ -277,14 +265,4 @@ ESG_SECTORS = {
     'healthcare': 'Healthcare',
     'education': 'Education',
     'other': 'Other',
-}
-
-UAE_EMIRATES = {
-    'abu-dhabi': 'Abu Dhabi',
-    'dubai': 'Dubai',
-    'sharjah': 'Sharjah',
-    'ajman': 'Ajman',
-    'umm-al-quwain': 'Umm Al Quwain',
-    'ras-al-khaimah': 'Ras Al Khaimah',
-    'fujairah': 'Fujairah',
 }
