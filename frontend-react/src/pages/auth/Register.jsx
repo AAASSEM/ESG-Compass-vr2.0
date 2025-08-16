@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Card from '../../components/ui/Card';
+import { getApiBaseURL } from '../../utils/api-config';
 
 const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +29,7 @@ const Register = () => {
     
     try {
       // Debug: Check API connection
-      console.log('Attempting registration with backend at:', 'http://localhost:8000/api');
+      console.log('Attempting registration with backend at:', getApiBaseURL());
       
       const result = await registerUser({
         email: data.email,

@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import { useQueryClient } from 'react-query';
 import Button from '../ui/Button';
 import { esgAPI } from '../../services/api';
+import { getApiURL } from '../../utils/api-config';
 
 const ReportTestDataLoader = () => {
   const queryClient = useQueryClient();
@@ -30,7 +31,7 @@ const ReportTestDataLoader = () => {
       
       // This would call the Django management command via API if we had an endpoint
       // For now, we'll simulate it with a direct fetch to our test endpoint
-      const response = await fetch('http://localhost:8000/api/reports/templates/');
+      const response = await fetch(getApiURL('/reports/templates/'));
       
       if (response.ok) {
         const data = await response.json();

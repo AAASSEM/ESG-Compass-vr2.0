@@ -22,10 +22,12 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
-# Add your specific Render URL
+# Add your specific Render URL and ngrok domains
 ALLOWED_HOSTS.extend([
     'esg-compass-v2.onrender.com',
     '.onrender.com',  # Allow any subdomain on onrender.com
+    '.ngrok-free.app',  # Allow any ngrok domain
+    'a7544cd1a357.ngrok-free.app',  # Specific ngrok domain
 ])
 
 # Application definition
@@ -156,15 +158,34 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8080',
     'http://127.0.0.1:8000',
     'https://esg-compass-v2.onrender.com',  # Production Render URL
+    'https://*.onrender.com',  # Any Render domain
+    'http://*.ngrok-free.app',  # Any ngrok domain HTTP
+    'https://*.ngrok-free.app',  # Any ngrok domain HTTPS
 ]
 
 # CORS settings
+<<<<<<< HEAD
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
     'https://esg-compass-v2.onrender.com',
+=======
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:8000,http://127.0.0.1:8000,http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,https://esg-compass-v2.onrender.com,https://a7544cd1a357.ngrok-free.app,http://a7544cd1a357.ngrok-free.app').split(',')
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
+CORS_ALLOWED_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+>>>>>>> 63081ba (Describe the changes you made)
 ]
 CORS_ALLOW_CREDENTIALS = True
 

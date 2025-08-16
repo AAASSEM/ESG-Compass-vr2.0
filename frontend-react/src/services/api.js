@@ -1,8 +1,22 @@
 import axios from 'axios';
 
 // Create axios instance pointing directly to Django (updated to port 8000)
+// Use ngrok/Render URL for remote access, fallback to localhost for development
+const getBaseURL = () => {
+  // If we're accessing via ngrok, use the ngrok URL for API calls
+  if (window.location.hostname.includes('ngrok-free.app')) {
+    return `https://${window.location.hostname}/api`;
+  }
+  // If we're accessing via Render, use the Render URL for API calls
+  if (window.location.hostname.includes('onrender.com')) {
+    return `https://${window.location.hostname}/api`;
+  }
+  // Otherwise use localhost for development
+  return 'http://localhost:8000/api';
+};
+
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',  // Direct connection to Django
+  baseURL: getBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },

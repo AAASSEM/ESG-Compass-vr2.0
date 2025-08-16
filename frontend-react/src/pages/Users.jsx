@@ -11,6 +11,7 @@ import Modal from '../components/ui/Modal';
 import UserAvatar from '../components/ui/UserAvatar';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { esgAPI } from '../services/api';
+import { getApiURL } from '../utils/api-config';
 
 const Users = () => {
   // Load real team members AND pending invitations from API
@@ -26,8 +27,8 @@ const Users = () => {
 
         // Fetch both team members and pending invitations
         const [membersResponse, invitationsResponse] = await Promise.all([
-          fetch('http://localhost:8000/api/users/team/members/', { headers }),
-          fetch('http://localhost:8000/api/users/invitations/', { headers })
+          fetch(getApiURL('/users/team/members/'), { headers }),
+          fetch(getApiURL('/users/invitations/'), { headers })
         ]);
 
         let members = [];
