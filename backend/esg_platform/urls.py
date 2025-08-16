@@ -1,3 +1,4 @@
+# esg_platform/urls.py
 """
 URL configuration for esg_platform project.
 """
@@ -6,8 +7,8 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
 from apps.dashboard.views import test_social_dashboard
-from .views import FrontendAppView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -28,9 +29,9 @@ urlpatterns = [
 # Serve media files in development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    # Static files will be served by WhiteNoise or Django's static file handler
 
-# Add catch-all pattern for frontend routes LAST
+# Serve the React app for all other routes
+# This should be LAST to catch all remaining routes
 urlpatterns += [
-    re_path(r'^.*$', FrontendAppView.as_view(), name='frontend'),
+    re_path(r'^.*$', TemplateView.as_view(template_name='index.html'), name='frontend'),
 ]
