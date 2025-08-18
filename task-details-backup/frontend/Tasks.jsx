@@ -30,16 +30,6 @@ import {
 
 const ItemType = 'TASK';
 
-// Helper function to clean task title by removing meter information
-const cleanTaskTitle = (task) => {
-  const originalTitle = task.title;
-  
-  // Remove meter information in parentheses since it's now shown in the Meter Tracking section
-  const cleanTitle = originalTitle.replace(/\s*\(.*meter.*\)/i, '');
-  
-  return cleanTitle.trim();
-};
-
 // Draggable Task Card Component
 const TaskCard = ({ task, onEdit, onViewDetails, isHighlighted = false }) => {
   // Drag functionality disabled
@@ -83,8 +73,8 @@ const TaskCard = ({ task, onEdit, onViewDetails, isHighlighted = false }) => {
         </div>
       </div>
 
-      <h4 className="text-text-high font-medium text-sm mb-2 line-clamp-4" title={cleanTaskTitle(task)}>
-        {cleanTaskTitle(task)}
+      <h4 className="text-text-high font-medium text-sm mb-2 line-clamp-4" title={task.title}>
+        {task.title}
       </h4>
 
       {task.description && (
@@ -135,44 +125,19 @@ const TaskCard = ({ task, onEdit, onViewDetails, isHighlighted = false }) => {
       )}
 
       {/* Meter Information Display */}
-      {(() => {
-        // Extract meters dynamically for task card display
-        const text = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
-        const meterTypes = [];
-        
-        if (text.includes('electricity') || text.includes('electric') || text.includes('kwh') || text.includes('power')) {
-          meterTypes.push({ type: 'electricity', icon: 'fa-bolt', color: 'text-green-400' });
-        }
-        if (text.includes('water') || text.includes('m³') || text.includes('cubic') || text.includes('hydro')) {
-          meterTypes.push({ type: 'water', icon: 'fa-droplet', color: 'text-blue-400' });
-        }
-        if (text.includes('gas') || text.includes('natural gas') || text.includes('lng') || text.includes('fuel')) {
-          meterTypes.push({ type: 'gas', icon: 'fa-fire', color: 'text-orange-400' });
-        }
-        
-        return meterTypes.length > 0 && (
-          <div className="mt-2 bg-brand-green/10 rounded-lg p-2">
-            <div className="flex items-center space-x-1 mb-2">
-              <i className="fa-solid fa-gauge text-brand-green text-xs"></i>
-              <span className="text-brand-green text-xs font-medium">Meter Tracking</span>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {meterTypes.map((meter, index) => (
-                <div key={index} className="flex items-center space-x-1 bg-white/10 rounded px-2 py-1">
-                  <i className={`fa-solid ${meter.icon} ${meter.color} text-xs`}></i>
-                  <span className="text-xs text-text-muted capitalize">{meter.type}</span>
-                </div>
-              ))}
-            </div>
-            {text.includes('bill') && (
-              <div className="text-xs text-text-muted mt-1 flex items-center">
-                <i className="fa-solid fa-file-invoice mr-1"></i>
-                Bills required
-              </div>
-            )}
+      {task.action_required && (task.action_required.includes('Meter') || task.action_required.includes('meter')) && (
+        <div className="mt-2 bg-brand-green/10 rounded-lg p-2">
+          <div className="flex items-center space-x-1">
+            <i className="fa-solid fa-gauge text-brand-green text-xs"></i>
+            <span className="text-brand-green text-xs font-medium">Meter Tracking</span>
           </div>
-        );
-      })()}
+          {task.action_required.split('\n').filter(line => line.includes('Meter') || line.includes('meter')).map((meterLine, index) => (
+            <div key={index} className="text-xs text-text-muted mt-1">
+              {meterLine.replace(/^.*?Meter\s*/i, 'Meter ').substring(0, 50)}...
+            </div>
+          ))}
+        </div>
+      )}
 
       {task.framework_tags && task.framework_tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">

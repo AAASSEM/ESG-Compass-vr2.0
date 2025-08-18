@@ -23,6 +23,11 @@ const Onboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  // Function to scroll to top of page
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Force fresh data when component mounts
   useEffect(() => {
     queryClient.invalidateQueries('company');
@@ -305,6 +310,7 @@ const Onboard = () => {
         
         setIsManualStep(true); // Mark as manually navigated
         setCurrentStep(2);
+        scrollToTop();
       },
       onError: (error) => {
       }
@@ -332,6 +338,7 @@ const Onboard = () => {
     
     setIsManualStep(true);
     setCurrentStep(3); // Move to ESG Assessment
+    scrollToTop();
   };
 
   const handleESGComplete = async (results) => {
@@ -360,6 +367,7 @@ const Onboard = () => {
     
     setIsManualStep(true);
     setCurrentStep(4); // Move to completion
+    scrollToTop();
   };
 
   const handleCompleteOnboarding = async () => {
@@ -596,7 +604,10 @@ const Onboard = () => {
                         <Button
                           variant="primary"
                           size="large"
-                          onClick={() => setCurrentStep(2)}
+                          onClick={() => {
+                            setCurrentStep(2);
+                            scrollToTop();
+                          }}
                           className="flex-1"
                         >
                           View Locations
@@ -618,10 +629,16 @@ const Onboard = () => {
                 {currentStep === 2 && (
                   <LocationsStep
                     onComplete={handleLocationDataComplete}
-                    onBack={() => setCurrentStep(1)}
+                    onBack={() => {
+                      setCurrentStep(1);
+                      scrollToTop();
+                    }}
                     initialData={locationData}
                     isViewMode={isViewMode}
-                    onNextStep={() => setCurrentStep(3)}
+                    onNextStep={() => {
+                      setCurrentStep(3);
+                      scrollToTop();
+                    }}
                   />
                 )}
 
@@ -631,9 +648,15 @@ const Onboard = () => {
                     companyId={companyId}
                     businessSector={watch('business_sector')}
                     onComplete={handleESGComplete}
-                    onBack={() => setCurrentStep(2)}
+                    onBack={() => {
+                      setCurrentStep(2);
+                      scrollToTop();
+                    }}
                     isViewMode={isViewMode}
-                    onNextStep={() => setCurrentStep(4)}
+                    onNextStep={() => {
+                      setCurrentStep(4);
+                      scrollToTop();
+                    }}
                   />
                 )}
 
@@ -721,7 +744,10 @@ const Onboard = () => {
                           <Button
                             variant="outline"
                             size="large"
-                            onClick={() => setCurrentStep(3)}
+                            onClick={() => {
+                              setCurrentStep(3);
+                              scrollToTop();
+                            }}
                             className="px-6"
                           >
                             <i className="fas fa-arrow-left mr-2"></i>

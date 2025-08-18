@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarC
 import Layout from '../components/layout/Layout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import Select from '../components/ui/Select';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { esgAPI } from '../services/api';
 
@@ -13,6 +14,12 @@ const SmartDashboard = () => {
   const queryClient = useQueryClient();
   const [selectedMetric, setSelectedMetric] = useState('energy_consumption');
   const [dataSource, setDataSource] = useState('all'); // 'all', 'environmental', 'social', 'governance'
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    category: 'all',
+    period: 'monthly',
+    dataSource: 'all'
+  });
 
   // Clear cached data when user changes (login/logout)
   useEffect(() => {
@@ -356,7 +363,7 @@ const SmartDashboard = () => {
     return metrics;
   };
 
-  // Get filtered metrics based on data source selection
+  // Get filtered metrics based on filter selection
   const getFilteredMetrics = () => {
     const allMetrics = getMetricsFromAPI();
     
@@ -370,7 +377,7 @@ const SmartDashboard = () => {
       }
     });
     
-    if (dataSource === 'all') {
+    if (filters.category === 'all') {
       return validMetrics;
     }
     
@@ -378,11 +385,11 @@ const SmartDashboard = () => {
     const filtered = {};
     Object.keys(validMetrics).forEach(key => {
       const metric = validMetrics[key];
-      if (dataSource === 'environmental' && metric.category === 'environmental') {
+      if (filters.category === 'environmental' && metric.category === 'environmental') {
         filtered[key] = metric;
-      } else if (dataSource === 'social' && metric.category === 'social') {
+      } else if (filters.category === 'social' && metric.category === 'social') {
         filtered[key] = metric;
-      } else if (dataSource === 'governance' && metric.category === 'governance') {
+      } else if (filters.category === 'governance' && metric.category === 'governance') {
         filtered[key] = metric;
       }
     });
@@ -750,21 +757,69 @@ const SmartDashboard = () => {
             )}
           </div>
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 text-sm">
-              <span className="text-text-muted">Data Source:</span>
-              <select 
-                value={dataSource}
-                onChange={(e) => setDataSource(e.target.value)}
-                className="bg-white/10 border border-white/20 rounded px-3 py-1 text-text-high"
-              >
-                <option value="all" className="bg-[#131A2C] text-text-high">All Categories</option>
-                <option value="environmental" className="bg-[#131A2C] text-text-high">Environmental</option>
-                <option value="social" className="bg-[#131A2C] text-text-high">Social</option>
-                <option value="governance" className="bg-[#131A2C] text-text-high">Governance</option>
-              </select>
-            </div>
+            <Button
+              variant="outline"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <i className="fa-solid fa-filter mr-2"></i>
+              Filter
+            </Button>
           </div>
         </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Select
+                label="Category"
+                value={filters.category}
+                onChange={(e) => setFilters({...filters, category: e.target.value})}
+                options={[
+                  { value: 'all', label: 'All Categories' },
+                  { value: 'environmental', label: 'Environmental' },
+                  { value: 'social', label: 'Social' },
+                  { value: 'governance', label: 'Governance' }
+                ]}
+              />
+              <Select
+                label="Time Period"
+                value={filters.period}
+                onChange={(e) => setFilters({...filters, period: e.target.value})}
+                options={[
+                  { value: 'daily', label: 'Daily' },
+                  { value: 'weekly', label: 'Weekly' },
+                  { value: 'monthly', label: 'Monthly' },
+                  { value: 'quarterly', label: 'Quarterly' },
+                  { value: 'annually', label: 'Annually' }
+                ]}
+              />
+              <Select
+                label="Data Source"
+                value={filters.dataSource}
+                onChange={(e) => setFilters({...filters, dataSource: e.target.value})}
+                options={[
+                  { value: 'all', label: 'All Sources' },
+                  { value: 'file_data', label: 'Uploaded Files' },
+                  { value: 'task_progress', label: 'Task Progress' },
+                  { value: 'manual_entry', label: 'Manual Entry' }
+                ]}
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+              <span className="text-sm text-text-muted">
+                Viewing {filters.category !== 'all' ? filters.category : 'all'} data for {filters.period} period
+              </span>
+              <Button
+                variant="outline"
+                size="small"
+                onClick={() => setFilters({ category: 'all', period: 'monthly', dataSource: 'all' })}
+              >
+                Clear Filters
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* ESG Score Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">

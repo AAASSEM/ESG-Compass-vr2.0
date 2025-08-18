@@ -18,35 +18,116 @@ const ESGScopingWizard = ({ companyId, businessSector, onComplete, onBack, isVie
   const [isLoading, setIsLoading] = useState(false);
   const [scopingData, setScopingData] = useState(null);
 
-  // Clean framework text by removing criterion numbers and technical references
-  const cleanFrameworkText = (text) => {
-    if (!text) return '';
+  // Framework color mapping
+  const getFrameworkColor = (frameworkName) => {
+    const colorMap = {
+      // Dubai/Local Frameworks
+      'DST': 'bg-blue-100 text-blue-800 border-blue-200',
+      'Dubai Sustainable Tourism': 'bg-blue-100 text-blue-800 border-blue-200',
+      'Al Sa\'fat': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      'Estidama': 'bg-purple-100 text-purple-800 border-purple-200',
+      
+      // International Green Standards
+      'Green Key': 'bg-green-100 text-green-800 border-green-200',
+      'LEED': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      'BREEAM': 'bg-teal-100 text-teal-800 border-teal-200',
+      'ISO 14001': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+      
+      // UAE Federal/Government
+      'Climate Law': 'bg-red-100 text-red-800 border-red-200',
+      'Federal': 'bg-red-100 text-red-800 border-red-200',
+      'UAE': 'bg-red-100 text-red-800 border-red-200',
+      'ADEK': 'bg-orange-100 text-orange-800 border-orange-200',
+      'DoH': 'bg-pink-100 text-pink-800 border-pink-200',
+      'MOHAP': 'bg-rose-100 text-rose-800 border-rose-200',
+      
+      // Industry Specific
+      'SSI': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'Sustainable Schools': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      
+      // Default
+      'default': 'bg-gray-100 text-gray-800 border-gray-200'
+    };
+
+    // Check for partial matches
+    for (const [key, color] of Object.entries(colorMap)) {
+      if (frameworkName.includes(key)) {
+        return color;
+      }
+    }
     
-    let cleaned = text
-      // Remove criterion numbers and descriptions
-      .replace(/:\s*\d+\.\d+\s+[^,()]+/g, '') // ": 2.1 Curriculum Integration"
-      .replace(/imperative\s+criterion\s+\d+\.\d+/gi, '') // "imperative criterion 1.1"
-      .replace(/criterion\s+\d+\.\d+/gi, '') // "criterion 7.1"
-      .replace(/guideline\s+\d+\.\d+/gi, '') // "guideline 1.1"
-      .replace(/\d+\.\d+\s*&?\s*\d*\.\d*/g, '') // "1.1 & 1.2" or "2.5"
-      
-      // Remove status markers and descriptions
-      .replace(/\([IGC]\)/g, '') // Remove (I), (G), (C) markers
-      .replace(/\(Imperative\)/gi, '') // Remove (Imperative)
-      .replace(/\(Guideline\)/gi, '') // Remove (Guideline)
-      .replace(/\(Mandatory\)/gi, '') // Remove (Mandatory)
-      
-      // Remove common descriptive suffixes
-      .replace(/:\s*Environmental Manager required/gi, '')
-      .replace(/:\s*Monthly resource tracking/gi, '')
-      .replace(/:\s*Recommends\s+[^,]+/gi, '') // ": Recommends integration"
-      
-      // Clean up formatting
-      .replace(/\s*[:,]\s*$/, '') // Remove trailing colons/commas
-      .replace(/\s+/g, ' ') // Normalize whitespace
-      .trim();
+    return colorMap.default;
+  };
+
+  // ESG categorization based on sector-specific categories from the MD document
+  const getESGCategory = (sectorCategory) => {
+    const environmentalCategories = [
+      'Energy', 'Water', 'Waste', 'Air Quality', 'Resource Management', 
+      'Energy & Emissions', 'Packaging & Waste', 'Construction Phase',
+      'Operational Phase', 'Waste & Materials', 'Fleet & Transportation',
+      'Warehousing & Operations'
+    ];
     
-    return cleaned;
+    const socialCategories = [
+      'Supply Chain', 'Health & Environment', 'Student Engagement'
+    ];
+    
+    const governanceCategories = [
+      'Governance & Management', 'Policy & Management', 'Governance & Systems',
+      'Governance & Infrastructure', 'Project Planning & Design'
+    ];
+    
+    if (environmentalCategories.some(cat => sectorCategory?.includes(cat))) {
+      return { 
+        name: 'Environmental', 
+        color: 'bg-green-100 text-green-800 border-green-200',
+        icon: '🌱'
+      };
+    }
+    
+    if (socialCategories.some(cat => sectorCategory?.includes(cat))) {
+      return { 
+        name: 'Social', 
+        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        icon: '👥'
+      };
+    }
+    
+    if (governanceCategories.some(cat => sectorCategory?.includes(cat))) {
+      return { 
+        name: 'Governance', 
+        color: 'bg-purple-100 text-purple-800 border-purple-200',
+        icon: '🏛️'
+      };
+    }
+    
+    // Default to Environmental for unmatched categories
+    return { 
+      name: 'Environmental', 
+      color: 'bg-green-100 text-green-800 border-green-200',
+      icon: '🌱'
+    };
+  };
+
+  // Display frameworks as colored badges without cleaning
+  const renderFrameworkBadges = (text) => {
+    if (!text) return null;
+    
+    // Split frameworks by comma and create colored badges
+    const frameworks = text.split(',').map(f => f.trim()).filter(f => f);
+    
+    return (
+      <div className="flex flex-wrap gap-1">
+        {frameworks.map((framework, index) => (
+          <span
+            key={index}
+            className={`inline-block px-2 py-1 text-xs font-medium rounded-md border ${getFrameworkColor(framework)}`}
+          >
+            {framework}
+          </span>
+        ))}
+      </div>
+    );
   };
 
   // Get sector-specific ESG questions from imported data
@@ -77,27 +158,20 @@ const ESGScopingWizard = ({ companyId, businessSector, onComplete, onBack, isVie
       return {};
     }
 
-    // Group questions by their actual sector-specific categories
-    const groupedQuestions = {};
-    
-    // Initialize with sector-specific categories
-    if (sectorData.categories) {
-      sectorData.categories.forEach(category => {
-        groupedQuestions[category] = [];
-      });
-    }
+    // Group questions by ESG categories instead of sector-specific categories
+    const groupedQuestions = {
+      'Environmental': [],
+      'Social': [],
+      'Governance': []
+    };
 
-    // Group questions by their category field (exact match)
+    // Group questions by their ESG category using our mapping function
     sectorData.questions.forEach(question => {
-      const category = question.category;
-      if (groupedQuestions[category]) {
-        groupedQuestions[category].push(question);
-      } else {
-        // If category doesn't exist, add it
-        if (!groupedQuestions[category]) {
-          groupedQuestions[category] = [];
-        }
-        groupedQuestions[category].push(question);
+      const esgCategory = getESGCategory(question.category);
+      const categoryName = esgCategory.name;
+      
+      if (groupedQuestions[categoryName]) {
+        groupedQuestions[categoryName].push(question);
       }
     });
 
@@ -108,27 +182,17 @@ const ESGScopingWizard = ({ companyId, businessSector, onComplete, onBack, isVie
   const categories = Object.keys(questions);
   const currentQuestions = questions[categories[currentCategory]] || [];
 
-  // Get appropriate icon for category
+  // Get appropriate icon for ESG category
   const getCategoryIcon = (category) => {
-    const categoryLower = category?.toLowerCase() || '';
-    
-    if (categoryLower.includes('governance') || categoryLower.includes('management') || 
-        categoryLower.includes('policy') || categoryLower.includes('infrastructure')) {
-      return 'fa-shield-alt text-brand-teal';
-    } else if (categoryLower.includes('energy') || categoryLower.includes('water') || 
-               categoryLower.includes('waste') || categoryLower.includes('environmental') ||
-               categoryLower.includes('construction') || categoryLower.includes('operational') ||
-               categoryLower.includes('resource') || categoryLower.includes('packaging')) {
-      return 'fa-leaf text-brand-green';
-    } else if (categoryLower.includes('social') || categoryLower.includes('health') || 
-               categoryLower.includes('fleet') || categoryLower.includes('warehousing')) {
-      return 'fa-users text-brand-blue';
-    } else if (categoryLower.includes('planning') || categoryLower.includes('design')) {
-      return 'fa-drafting-compass text-brand-blue';
-    } else if (categoryLower.includes('phase')) {
-      return 'fa-hard-hat text-brand-green';
-    } else {
-      return 'fa-clipboard-check text-brand-green';
+    switch (category) {
+      case 'Environmental':
+        return 'fa-leaf text-brand-green';
+      case 'Social':
+        return 'fa-users text-brand-blue';
+      case 'Governance':
+        return 'fa-shield text-brand-teal';
+      default:
+        return 'fa-clipboard-check text-brand-green';
     }
   };
 
@@ -361,7 +425,10 @@ const ESGScopingWizard = ({ companyId, businessSector, onComplete, onBack, isVie
                     
                     <div className="space-y-2 text-sm text-text-muted">
                       <p><strong>Why this matters:</strong> {question.rationale}</p>
-                      <p><strong>Frameworks:</strong> {cleanFrameworkText(question.frameworks)}</p>
+                      <div className="mb-2">
+                        <p className="font-semibold text-text-muted mb-1">Frameworks:</p>
+                        {renderFrameworkBadges(question.frameworks)}
+                      </div>
                       <p><strong>Data source:</strong> {question.data_source}</p>
                     </div>
                   </div>
@@ -387,7 +454,7 @@ const ESGScopingWizard = ({ companyId, businessSector, onComplete, onBack, isVie
                         ✗ No
                       </Button>
                       <Button
-                        variant={answers[question.id] === 'partial' ? 'secondary' : 'outline'}
+                        variant={answers[question.id] === 'partial' ? 'warning' : 'outline'}
                         onClick={() => !isViewMode && updateAnswer(question.id, 'partial')}
                         className="px-6"
                         disabled={isViewMode}

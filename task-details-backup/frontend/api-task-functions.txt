@@ -1,0 +1,22 @@
+326:    const response = await api.post(`/esg/responses/${responseId}/evidence/`, formData, {
+332:  // ==================== Task Methods ====================
+334:  async getTasks(filters = {}) {
+340:    const url = `/tasks/${params.toString() ? `?${params.toString()}` : ''}`;
+345:  async createTask(taskData) {
+346:    const response = await api.post('/tasks/', taskData);
+350:  async updateTask(taskId, taskData) {
+351:    const response = await api.patch(`/tasks/${taskId}/`, taskData);
+355:  async deleteTask(taskId) {
+356:    await api.delete(`/tasks/${taskId}/`);
+360:  async getTaskAttachments(taskId) {
+362:      const response = await api.get(`/tasks/${taskId}/attachments/`);
+363:      return response.data.attachments || [];
+369:        console.warn(`Task ${taskId} not found or has no attachments`);
+376:  async uploadTaskAttachment(taskId, fileData) {
+382:      formData.append('attachment_type', fileData.attachment_type || 'evidence');
+385:      const response = await api.post(`/tasks/${taskId}/upload_attachment/`, formData, {
+388:      return response.data.attachment;
+397:  async deleteTaskAttachment(taskId, attachmentId) {
+399:      const response = await api.delete(`/tasks/${taskId}/attachments/${attachmentId}/`);
+409:  async syncFrontendTasks(tasks) {
+410:    const response = await api.post('/tasks/sync-frontend/', { tasks });

@@ -16,6 +16,8 @@ const Button = ({
     primary: 'bg-brand-green hover:bg-green-500 text-white hover:scale-105',
     secondary: 'bg-brand-blue hover:bg-blue-600 text-white',
     tertiary: 'bg-brand-teal hover:bg-teal-600 text-white',
+    danger: 'bg-red-600 hover:bg-red-500 text-white hover:scale-105',
+    warning: 'bg-orange-500 hover:bg-orange-400 text-white hover:scale-105',
     outline: 'border border-white/20 text-text-muted hover:text-text-high hover:bg-white/5',
     ghost: 'text-text-muted hover:text-text-high hover:bg-white/5',
   };

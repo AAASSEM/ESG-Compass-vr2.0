@@ -16,6 +16,12 @@ const Dashboard = () => {
   const [selectedTab, setSelectedTab] = useState('overview'); // Default to overview
   const [selectedMetric, setSelectedMetric] = useState('employee_satisfaction');
   const [selectedPeriod, setSelectedPeriod] = useState('monthly');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    category: 'all',
+    period: 'monthly',
+    dataSource: 'all'
+  });
   const queryClient = useQueryClient();
 
   // Clear cached data when user changes (login/logout) - less aggressive
@@ -734,6 +740,10 @@ const Dashboard = () => {
             emissionsData={emissionsData}
             taskStats={taskStats}
             realProgress={realProgress}
+            showFilters={showFilters}
+            setShowFilters={setShowFilters}
+            filters={filters}
+            setFilters={setFilters}
           />
         )}
       </div>
@@ -742,9 +752,131 @@ const Dashboard = () => {
 };
 
 // Overview Content Component
-const OverviewContent = ({ company, trendData, emissionsData, taskStats, realProgress }) => {
+const OverviewContent = ({ company, trendData, emissionsData, taskStats, realProgress, showFilters, setShowFilters, filters, setFilters }) => {
+  // Apply category filter to progress data
+  const filteredProgress = React.useMemo(() => {
+    if (filters.category === 'all') {
+      return realProgress;
+    }
+    
+    // Show only the selected category
+    const filtered = {
+      environmental: filters.category === 'environmental' ? realProgress.environmental : 0,
+      social: filters.category === 'social' ? realProgress.social : 0,
+      governance: filters.category === 'governance' ? realProgress.governance : 0,
+      overall: realProgress[filters.category] || 0
+    };
+    
+    return filtered;
+  }, [realProgress, filters.category]);
+
+  // Filter trend data based on filters
+  const filteredTrendData = React.useMemo(() => {
+    if (filteredProgress.overall === 0) return [];
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+    return months.map((month, index) => ({
+      month,
+      environmental: filters.category === 'all' || filters.category === 'environmental' 
+        ? Math.min(filteredProgress.environmental, (index + 1) * 15) : 0,
+      social: filters.category === 'all' || filters.category === 'social' 
+        ? Math.min(filteredProgress.social, (index + 1) * 17) : 0,
+      governance: filters.category === 'all' || filters.category === 'governance' 
+        ? Math.min(filteredProgress.governance, (index + 1) * 16) : 0,
+    }));
+  }, [filteredProgress, filters.category]);
+
+  // Filter emissions data based on filters  
+  const filteredEmissionsData = React.useMemo(() => {
+    if (filteredProgress.overall === 0) return [];
+    
+    const data = [
+      { name: 'Environmental', value: filteredProgress.environmental, color: '#2EC57D' },
+      { name: 'Social', value: filteredProgress.social, color: '#3DAEFF' },
+      { name: 'Governance', value: filteredProgress.governance, color: '#20C5C5' },
+    ];
+    
+    // Filter based on category selection
+    if (filters.category !== 'all') {
+      return data.filter(item => 
+        item.name.toLowerCase() === filters.category && item.value > 0
+      );
+    }
+    
+    return data.filter(item => item.value > 0);
+  }, [filteredProgress, filters.category]);
+
   return (
     <>
+      {/* Header with Filter Controls */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-text-high">ESG Dashboard Overview</h2>
+          <p className="text-text-muted">Monitor your ESG performance and progress</p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <i className="fa-solid fa-filter mr-2"></i>
+          Filter
+        </Button>
+      </div>
+
+      {/* Filter Panel */}
+      {showFilters && (
+        <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Select
+              label="Category"
+              value={filters.category}
+              onChange={(e) => setFilters({...filters, category: e.target.value})}
+              options={[
+                { value: 'all', label: 'All Categories' },
+                { value: 'environmental', label: 'Environmental' },
+                { value: 'social', label: 'Social' },
+                { value: 'governance', label: 'Governance' }
+              ]}
+            />
+            <Select
+              label="Time Period"
+              value={filters.period}
+              onChange={(e) => setFilters({...filters, period: e.target.value})}
+              options={[
+                { value: 'daily', label: 'Daily' },
+                { value: 'weekly', label: 'Weekly' },
+                { value: 'monthly', label: 'Monthly' },
+                { value: 'quarterly', label: 'Quarterly' },
+                { value: 'annually', label: 'Annually' }
+              ]}
+            />
+            <Select
+              label="Data Source"
+              value={filters.dataSource}
+              onChange={(e) => setFilters({...filters, dataSource: e.target.value})}
+              options={[
+                { value: 'all', label: 'All Sources' },
+                { value: 'file_data', label: 'Uploaded Files' },
+                { value: 'task_progress', label: 'Task Progress' },
+                { value: 'manual_entry', label: 'Manual Entry' }
+              ]}
+            />
+          </div>
+          <div className="mt-4 flex items-center justify-between">
+            <span className="text-sm text-text-muted">
+              Viewing {filters.category !== 'all' ? filters.category : 'all'} data for {filters.period} period
+            </span>
+            <Button
+              variant="outline"
+              size="small"
+              onClick={() => setFilters({ category: 'all', period: 'monthly', dataSource: 'all' })}
+            >
+              Clear Filters
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card>
@@ -753,15 +885,15 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
             <i className="fa-solid fa-chart-pie text-brand-green"></i>
           </div>
           <div className="text-2xl font-bold mb-2" style={{
-            color: realProgress.overall > 0 ? '#2EC57D' : 'rgba(248,249,250,0.72)'
+            color: filteredProgress.overall > 0 ? '#2EC57D' : 'rgba(248,249,250,0.72)'
           }}>
-            {realProgress.overall > 0 ? Math.round(realProgress.overall) : '–'}%
+            {filteredProgress.overall > 0 ? Math.round(filteredProgress.overall) : '–'}%
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs" style={{
-              color: realProgress.overall > 0 ? '#2EC57D' : 'rgba(248,249,250,0.72)'
+              color: filteredProgress.overall > 0 ? '#2EC57D' : 'rgba(248,249,250,0.72)'
             }}>
-              {realProgress.overall > 0 ? 'Based on evidence uploads' : 'No evidence uploaded'}
+              {filteredProgress.overall > 0 ? 'Based on evidence uploads' : 'No evidence uploaded'}
             </span>
           </div>
         </Card>
@@ -772,15 +904,15 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
             <i className="fa-solid fa-leaf text-brand-green"></i>
           </div>
           <div className="text-2xl font-bold mb-2" style={{
-            color: realProgress.environmental > 0 ? '#2EC57D' : 'rgba(248,249,250,0.72)'
+            color: filteredProgress.environmental > 0 ? '#2EC57D' : 'rgba(248,249,250,0.72)'
           }}>
-            {realProgress.environmental > 0 ? Math.round(realProgress.environmental) : '–'}%
+            {filteredProgress.environmental > 0 ? Math.round(filteredProgress.environmental) : '–'}%
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs" style={{
-              color: realProgress.environmental > 0 ? '#2EC57D' : 'rgba(248,249,250,0.72)'
+              color: filteredProgress.environmental > 0 ? '#2EC57D' : 'rgba(248,249,250,0.72)'
             }}>
-              {realProgress.environmental > 0 ? 'Based on uploaded evidence' : 'No evidence uploaded'}
+              {filteredProgress.environmental > 0 ? 'Based on uploaded evidence' : 'No evidence uploaded'}
             </span>
           </div>
         </Card>
@@ -791,15 +923,15 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
             <i className="fa-solid fa-users text-brand-blue"></i>
           </div>
           <div className="text-2xl font-bold mb-2" style={{
-            color: realProgress.social > 0 ? '#3DAEFF' : 'rgba(248,249,250,0.72)'
+            color: filteredProgress.social > 0 ? '#3DAEFF' : 'rgba(248,249,250,0.72)'
           }}>
-            {realProgress.social > 0 ? Math.round(realProgress.social) : '–'}%
+            {filteredProgress.social > 0 ? Math.round(filteredProgress.social) : '–'}%
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs" style={{
-              color: realProgress.social > 0 ? '#3DAEFF' : 'rgba(248,249,250,0.72)'
+              color: filteredProgress.social > 0 ? '#3DAEFF' : 'rgba(248,249,250,0.72)'
             }}>
-              {realProgress.social > 0 ? 'Based on uploaded evidence' : 'No evidence uploaded'}
+              {filteredProgress.social > 0 ? 'Based on uploaded evidence' : 'No evidence uploaded'}
             </span>
           </div>
         </Card>
@@ -810,15 +942,15 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
             <i className="fa-solid fa-shield-halved text-brand-teal"></i>
           </div>
           <div className="text-2xl font-bold mb-2" style={{
-            color: realProgress.governance > 0 ? '#20C5C5' : 'rgba(248,249,250,0.72)'
+            color: filteredProgress.governance > 0 ? '#20C5C5' : 'rgba(248,249,250,0.72)'
           }}>
-            {realProgress.governance > 0 ? Math.round(realProgress.governance) : '–'}%
+            {filteredProgress.governance > 0 ? Math.round(filteredProgress.governance) : '–'}%
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs" style={{
-              color: realProgress.governance > 0 ? '#20C5C5' : 'rgba(248,249,250,0.72)'
+              color: filteredProgress.governance > 0 ? '#20C5C5' : 'rgba(248,249,250,0.72)'
             }}>
-              {realProgress.governance > 0 ? 'Based on uploaded evidence' : 'No evidence uploaded'}
+              {filteredProgress.governance > 0 ? 'Based on uploaded evidence' : 'No evidence uploaded'}
             </span>
           </div>
         </Card>
@@ -832,9 +964,9 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
               <h3 className="text-lg font-semibold text-text-high">ESG Trends</h3>
             </div>
             <div className="h-64">
-              {trendData && trendData.length > 0 ? (
+              {filteredTrendData && filteredTrendData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendData}>
+                  <LineChart data={filteredTrendData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                     <XAxis 
                       dataKey="month" 
@@ -887,11 +1019,11 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
               <h3 className="text-lg font-semibold text-text-high">Progress Breakdown</h3>
             </div>
             <div className="h-64">
-              {emissionsData && emissionsData.length > 0 ? (
+              {filteredEmissionsData && filteredEmissionsData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={emissionsData}
+                      data={filteredEmissionsData}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
@@ -899,7 +1031,7 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
                       paddingAngle={5}
                       dataKey="value"
                     >
-                      {emissionsData.map((entry, index) => (
+                      {filteredEmissionsData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -924,9 +1056,9 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-text-high">Priority Recommendations</h3>
             </div>
-            {realProgress.overall > 0 ? (
+            {filteredProgress.overall > 0 ? (
               <div className="space-y-4">
-                {realProgress.environmental < 70 && (
+                {filteredProgress.environmental < 70 && (filters.category === 'all' || filters.category === 'environmental') && (
                   <div className="flex items-start space-x-3 p-4 bg-white/5 rounded-lg">
                     <div className="w-3 h-3 bg-brand-green rounded-full mt-2"></div>
                     <div className="flex-1">
@@ -937,7 +1069,7 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
                   </div>
                 )}
                 
-                {realProgress.social < 70 && (
+                {filteredProgress.social < 70 && (filters.category === 'all' || filters.category === 'social') && (
                   <div className="flex items-start space-x-3 p-4 bg-white/5 rounded-lg">
                     <div className="w-3 h-3 bg-brand-blue rounded-full mt-2"></div>
                     <div className="flex-1">
@@ -948,7 +1080,7 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
                   </div>
                 )}
                 
-                {realProgress.governance < 70 && (
+                {filteredProgress.governance < 70 && (filters.category === 'all' || filters.category === 'governance') && (
                   <div className="flex items-start space-x-3 p-4 bg-white/5 rounded-lg">
                     <div className="w-3 h-3 bg-brand-teal rounded-full mt-2"></div>
                     <div className="flex-1">
@@ -975,40 +1107,40 @@ const OverviewContent = ({ company, trendData, emissionsData, taskStats, realPro
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-text-high">2025 Targets & Progress</h3>
             </div>
-            {realProgress.overall > 0 ? (
+            {filteredProgress.overall > 0 ? (
               <div className="space-y-6">
-                {realProgress.environmental > 0 && (
+                {filteredProgress.environmental > 0 && (filters.category === 'all' || filters.category === 'environmental') && (
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-text-high">Environmental Score</span>
-                      <span className="text-sm text-brand-green">{Math.round(realProgress.environmental)}%</span>
+                      <span className="text-sm text-brand-green">{Math.round(filteredProgress.environmental)}%</span>
                     </div>
                     <div className="w-full bg-white/10 rounded-full h-2">
-                      <div className="bg-brand-green h-2 rounded-full" style={{ width: `${realProgress.environmental}%` }}></div>
+                      <div className="bg-brand-green h-2 rounded-full" style={{ width: `${filteredProgress.environmental}%` }}></div>
                     </div>
                   </div>
                 )}
 
-                {realProgress.social > 0 && (
+                {filteredProgress.social > 0 && (filters.category === 'all' || filters.category === 'social') && (
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-text-high">Social Score</span>
-                      <span className="text-sm text-brand-blue">{Math.round(realProgress.social)}%</span>
+                      <span className="text-sm text-brand-blue">{Math.round(filteredProgress.social)}%</span>
                     </div>
                     <div className="w-full bg-white/10 rounded-full h-2">
-                      <div className="bg-brand-blue h-2 rounded-full" style={{ width: `${realProgress.social}%` }}></div>
+                      <div className="bg-brand-blue h-2 rounded-full" style={{ width: `${filteredProgress.social}%` }}></div>
                     </div>
                   </div>
                 )}
 
-                {realProgress.governance > 0 && (
+                {filteredProgress.governance > 0 && (filters.category === 'all' || filters.category === 'governance') && (
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-text-high">Governance Score</span>
-                      <span className="text-sm text-brand-teal">{Math.round(realProgress.governance)}%</span>
+                      <span className="text-sm text-brand-teal">{Math.round(filteredProgress.governance)}%</span>
                     </div>
                     <div className="w-full bg-white/10 rounded-full h-2">
-                      <div className="bg-brand-teal h-2 rounded-full" style={{ width: `${realProgress.governance}%` }}></div>
+                      <div className="bg-brand-teal h-2 rounded-full" style={{ width: `${filteredProgress.governance}%` }}></div>
                     </div>
                   </div>
                 )}

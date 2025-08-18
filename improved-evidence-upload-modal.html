@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESG Task Management - Enhanced UI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0a0f1c 0%, #1a2332 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #e0e6ed;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal {
+            background: linear-gradient(145deg, #1e2936 0%, #161f2e 100%);
+            border-radius: 20px;
+            width: 90%;
+            max-width: 1000px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.4s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        @keyframes slideUp {
+            from { 
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to { 
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            padding: 28px 32px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .header-content h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .task-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .task-subtitle {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .close-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        .modal-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 0 32px;
+            margin-top: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab:hover {
+            color: #94a3b8;
+        }
+
+        .tab.active {
+            color: #4ade80;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+        }
+
+        .tab-badge {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+
+        .tab.active .tab-badge {
+            background: rgba(74, 222, 128, 0.2);
+        }
+
+        .modal-body {
+            padding: 32px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* Assignment Section */
+        .assignment-section {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .assignment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .assignment-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .user-select-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            color: white;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            color: #e2e8f0;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .user-role {
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .assign-btn {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .assign-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        /* Data Entry Section */
+        .data-entry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .data-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .data-card:hover {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(74, 222, 128, 0.2);
+        }
+
+        .data-card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .data-icon {
+            width: 36px;
+            height: 36px;
+            background: rgba(74, 222, 128, 0.1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .data-label {
+            flex: 1;
+        }
+
+        .data-title {
+            color: #cbd5e1;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .data-period {
+            color: #64748b;
+            font-size: 11px;
+        }
+
+        .data-input-group {
+            position: relative;
+        }
+
+        .data-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px 40px 12px 12px;
+            color: #e2e8f0;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .data-input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #4ade80;
+            box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.1);
+        }
+
+        .data-unit {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .data-helper {
+            margin-top: 8px;
+            color: #64748b;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .data-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+            padding: 6px 10px;
+            background: rgba(34, 197, 94, 0.05);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 6px;
+            color: #4ade80;
+            font-size: 12px;
+        }
+
+        .meter-info-box {
+            background: rgba(59, 130, 246, 0.05);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+
+        .meter-info-title {
+            color: #60a5fa;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .meter-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+        }
+
+        .meter-detail {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .meter-detail-label {
+            color: #64748b;
+            font-size: 11px;
+        }
+
+        .meter-detail-value {
+            color: #cbd5e1;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .quick-action {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 8px 16px;
+            color: #94a3b8;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .quick-action:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #cbd5e1;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .priority-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 24px;
+        }
+
+        .priority-low {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        .priority-medium {
+            background: rgba(251, 146, 60, 0.1);
+            color: #fb923c;
+            border: 1px solid rgba(251, 146, 60, 0.2);
+        }
+
+        .priority-high {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .compliance-info {
+            background: rgba(59, 130, 246, 0.05);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 28px;
+        }
+
+        .compliance-info h4 {
+            color: #60a5fa;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .compliance-info p {
+            color: #cbd5e1;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .requirements-section {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title .count {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .requirements-grid {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .requirement-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .requirement-card.completed {
+            background: rgba(34, 197, 94, 0.02);
+            border-color: rgba(34, 197, 94, 0.2);
+        }
+
+        .requirement-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .requirement-title {
+            font-weight: 500;
+            color: #f1f5f9;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .file-type-badge {
+            background: rgba(168, 85, 247, 0.1);
+            color: #a78bfa;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .requirement-details {
+            color: #94a3b8;
+            font-size: 13px;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .month-pills {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .month-pill {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .month-pill:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .month-pill.uploaded {
+            background: rgba(34, 197, 94, 0.1);
+            border-color: rgba(34, 197, 94, 0.3);
+            color: #4ade80;
+        }
+
+        .upload-zone {
+            background: rgba(255, 255, 255, 0.02);
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone:hover {
+            background: rgba(74, 222, 128, 0.02);
+            border-color: rgba(74, 222, 128, 0.3);
+        }
+
+        .upload-zone.dragging {
+            background: rgba(74, 222, 128, 0.05);
+            border-color: #4ade80;
+            transform: scale(1.02);
+        }
+
+        .upload-zone input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 24px;
+        }
+
+        .upload-text {
+            color: #e2e8f0;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .upload-hint {
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .uploaded-files {
+            margin-top: 16px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .uploaded-file {
+            background: rgba(34, 197, 94, 0.05);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            animation: slideInFile 0.3s ease;
+        }
+
+        @keyframes slideInFile {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(34, 197, 94, 0.1);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #4ade80;
+        }
+
+        .file-name {
+            color: #e2e8f0;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .file-size {
+            color: #64748b;
+            font-size: 11px;
+        }
+
+        .remove-file {
+            background: rgba(239, 68, 68, 0.1);
+            color: #f87171;
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .remove-file:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .progress-tracker {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 28px;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .progress-title {
+            font-size: 14px;
+            color: #cbd5e1;
+        }
+
+        .progress-percentage {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4ade80;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+            box-shadow: 0 0 10px rgba(74, 222, 128, 0.3);
+        }
+
+        .modal-footer {
+            padding: 24px 32px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .footer-info {
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .footer-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: #94a3b8;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #cbd5e1;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: #0a0f1c;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(74, 222, 128, 0.2);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(74, 222, 128, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Scrollbar styling */
+        .modal::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .modal::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .modal::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .modal::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+    </style>
+</head>
+<body>
+    <div class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="header-content">
+                    <h2>
+                        <div class="task-icon">⚡</div>
+                        Task Details & Evidence
+                    </h2>
+                    <div class="task-subtitle">Do you track your total monthly electricity consumption from the public grid?</div>
+                </div>
+                <button class="close-btn">✕</button>
+            </div>
+            
+            <div class="modal-tabs">
+                <button class="tab active" onclick="switchTab('overview')">
+                    <span>📊</span>
+                    <span>Overview</span>
+                </button>
+                <button class="tab" onclick="switchTab('data-entry')">
+                    <span>📝</span>
+                    <span>Data Entry</span>
+                    <span class="tab-badge">3</span>
+                </button>
+                <button class="tab" onclick="switchTab('evidence')">
+                    <span>📁</span>
+                    <span>Evidence Upload</span>
+                    <span class="tab-badge">1/3</span>
+                </button>
+                <button class="tab" onclick="switchTab('history')">
+                    <span>🕐</span>
+                    <span>History</span>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Overview Tab -->
+                <div id="overview-tab" class="tab-content active">
+                    <div class="priority-badge priority-high">
+                        <span>🔴</span>
+                        <span>HIGH PRIORITY</span>
+                        <span>• Due: Oct 11, 2025</span>
+                    </div>
+
+                    <div class="assignment-section">
+                        <div class="assignment-header">
+                            <div class="assignment-title">
+                                <span>👤</span>
+                                <span>Task Assignment</span>
+                            </div>
+                        </div>
+                        <div class="user-select-wrapper">
+                            <div class="user-avatar">JD</div>
+                            <div class="user-info">
+                                <div class="user-name">John Doe</div>
+                                <div class="user-role">Sustainability Manager</div>
+                            </div>
+                            <button class="assign-btn" onclick="showUserPicker()">Change Assignee</button>
+                        </div>
+                    </div>
+
+                    <div class="compliance-info">
+                        <h4>📋 Compliance Context</h4>
+                        <p><strong>DST Carbon Calculator:</strong> Mandatory monthly reporting requirement for all hotels in Dubai. This data feeds directly into your sustainability score and regulatory compliance status.</p>
+                    </div>
+
+                    <div class="meter-info-box">
+                        <div class="meter-info-title">
+                            <span>🔌</span>
+                            <span>Meter Information</span>
+                        </div>
+                        <div class="meter-details">
+                            <div class="meter-detail">
+                                <span class="meter-detail-label">Meter ID</span>
+                                <span class="meter-detail-value">ELE001</span>
+                            </div>
+                            <div class="meter-detail">
+                                <span class="meter-detail-label">Location</span>
+                                <span class="meter-detail-value">Main Building</span>
+                            </div>
+                            <div class="meter-detail">
+                                <span class="meter-detail-label">Provider</span>
+                                <span class="meter-detail-value">DEWA</span>
+                            </div>
+                            <div class="meter-detail">
+                                <span class="meter-detail-label">Last Reading</span>
+                                <span class="meter-detail-value">15,234 kWh</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="quick-actions">
+                        <button class="quick-action" onclick="switchTab('data-entry')">
+                            <span>📝</span>
+                            <span>Enter Monthly Data</span>
+                        </button>
+                        <button class="quick-action" onclick="switchTab('evidence')">
+                            <span>📤</span>
+                            <span>Upload Bills</span>
+                        </button>
+                        <button class="quick-action">
+                            <span>📊</span>
+                            <span>Download Template</span>
+                        </button>
+                        <button class="quick-action">
+                            <span>📧</span>
+                            <span>Send Reminder</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Data Entry Tab -->
+                <div id="data-entry-tab" class="tab-content">
+                    <div class="section-title">
+                        📊 Monthly Consumption Data Entry
+                    </div>
+
+                    <div class="data-entry-grid">
+                        <!-- July 2025 -->
+                        <div class="data-card">
+                            <div class="data-card-header">
+                                <div class="data-icon">📅</div>
+                                <div class="data-label">
+                                    <div class="data-title">July 2025</div>
+                                    <div class="data-period">01 Jul - 31 Jul</div>
+                                </div>
+                            </div>
+                            <div class="data-input-group">
+                                <input type="number" class="data-input" placeholder="Enter consumption" value="15234">
+                                <span class="data-unit">kWh</span>
+                            </div>
+                            <div class="data-helper">
+                                💡 Check your DEWA bill for this period
+                            </div>
+                            <div class="data-status">
+                                <span>✓</span>
+                                <span>Data saved</span>
+                            </div>
+                        </div>
+
+                        <!-- June 2025 -->
+                        <div class="data-card">
+                            <div class="data-card-header">
+                                <div class="data-icon">📅</div>
+                                <div class="data-label">
+                                    <div class="data-title">June 2025</div>
+                                    <div class="data-period">01 Jun - 30 Jun</div>
+                                </div>
+                            </div>
+                            <div class="data-input-group">
+                                <input type="number" class="data-input" placeholder="Enter consumption">
+                                <span class="data-unit">kWh</span>
+                            </div>
+                            <div class="data-helper">
+                                💡 Previous month: 14,892 kWh
+                            </div>
+                        </div>
+
+                        <!-- May 2025 -->
+                        <div class="data-card">
+                            <div class="data-card-header">
+                                <div class="data-icon">📅</div>
+                                <div class="data-label">
+                                    <div class="data-title">May 2025</div>
+                                    <div class="data-period">01 May - 31 May</div>
+                                </div>
+                            </div>
+                            <div class="data-input-group">
+                                <input type="number" class="data-input" placeholder="Enter consumption">
+                                <span class="data-unit">kWh</span>
+                            </div>
+                            <div class="data-helper">
+                                💡 Previous month: 14,567 kWh
+                            </div>
+                        </div>
+
+                        <!-- Cost Entry -->
+                        <div class="data-card">
+                            <div class="data-card-header">
+                                <div class="data-icon">💰</div>
+                                <div class="data-label">
+                                    <div class="data-title">Total Cost (3 months)</div>
+                                    <div class="data-period">Optional field</div>
+                                </div>
+                            </div>
+                            <div class="data-input-group">
+                                <input type="number" class="data-input" placeholder="Enter total cost">
+                                <span class="data-unit">AED</span>
+                            </div>
+                            <div class="data-helper">
+                                💡 Sum of all bills for reporting
+                            </div>
+                        </div>
+
+                        <!-- Peak Demand -->
+                        <div class="data-card">
+                            <div class="data-card-header">
+                                <div class="data-icon">⚡</div>
+                                <div class="data-label">
+                                    <div class="data-title">Peak Demand</div>
+                                    <div class="data-period">Highest usage</div>
+                                </div>
+                            </div>
+                            <div class="data-input-group">
+                                <input type="number" class="data-input" placeholder="Enter peak demand">
+                                <span class="data-unit">kW</span>
+                            </div>
+                            <div class="data-helper">
+                                💡 Check demand charges on bill
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="data-card">
+                            <div class="data-card-header">
+                                <div class="data-icon">📝</div>
+                                <div class="data-label">
+                                    <div class="data-title">Additional Notes</div>
+                                    <div class="data-period">Any anomalies?</div>
+                                </div>
+                            </div>
+                            <textarea class="data-input" style="height: 80px; padding-right: 12px;" placeholder="Enter any notes about consumption patterns..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="progress-tracker">
+                        <div class="progress-header">
+                            <div class="progress-title">Data Entry Progress</div>
+                            <div class="progress-percentage">33%</div>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 33%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Evidence Upload Tab -->
+                <div id="evidence-tab" class="tab-content">
+                    <div class="requirements-section">
+                        <h3 class="section-title">
+                            📁 Required Documents
+                            <span class="count">3 Files</span>
+                        </h3>
+                        
+                        <div class="requirements-grid">
+                            <!-- DEWA Bills -->
+                            <div class="requirement-card">
+                                <div class="requirement-header">
+                                    <div class="requirement-title">
+                                        ⚡ DEWA Electricity Bills
+                                    </div>
+                                    <div class="file-type-badge">PDF/JPG</div>
+                                </div>
+                                <div class="requirement-details">
+                                    Upload your last 3 months of DEWA electricity bills showing consumption in kWh for <strong>Meter ELE001</strong> at Main Building.
+                                </div>
+                                <div class="month-pills">
+                                    <div class="month-pill uploaded">
+                                        <span>✓</span> July 2025
+                                    </div>
+                                    <div class="month-pill">
+                                        <span>○</span> June 2025
+                                    </div>
+                                    <div class="month-pill">
+                                        <span>○</span> May 2025
+                                    </div>
+                                </div>
+                                <div class="upload-zone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                                    <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileSelect(event)">
+                                    <div class="upload-icon">📤</div>
+                                    <div class="upload-text">Drop files here or click to browse</div>
+                                    <div class="upload-hint">Accept: PDF, JPG, PNG (Max 10MB each)</div>
+                                </div>
+                                <div class="uploaded-files">
+                                    <div class="uploaded-file">
+                                        <div class="file-info">
+                                            <div class="file-icon">📄</div>
+                                            <div>
+                                                <div class="file-name">DEWA_Bill_July_2025.pdf</div>
+                                                <div class="file-size">2.4 MB • Uploaded just now</div>
+                                            </div>
+                                        </div>
+                                        <button class="remove-file">✕</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Consumption Summary -->
+                            <div class="requirement-card">
+                                <div class="requirement-header">
+                                    <div class="requirement-title">
+                                        📊 Monthly Consumption Summary
+                                    </div>
+                                    <div class="file-type-badge">Excel/CSV</div>
+                                </div>
+                                <div class="requirement-details">
+                                    Download our template and fill in the monthly consumption data for tracking purposes.
+                                </div>
+                                <div class="upload-zone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                                    <input type="file" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(event)">
+                                    <div class="upload-icon">📊</div>
+                                    <div class="upload-text">Upload completed template</div>
+                                    <div class="upload-hint">Download template first • Excel or CSV format</div>
+                                </div>
+                            </div>
+
+                            <!-- Meter Photo -->
+                            <div class="requirement-card">
+                                <div class="requirement-header">
+                                    <div class="requirement-title">
+                                        📸 Meter Photo (Optional)
+                                    </div>
+                                    <div class="file-type-badge">JPG/PNG</div>
+                                </div>
+                                <div class="requirement-details">
+                                    Photo of physical meter showing current reading for verification (recommended but not required).
+                                </div>
+                                <div class="upload-zone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                                    <input type="file" accept=".jpg,.jpeg,.png" onchange="handleFileSelect(event)">
+                                    <div class="upload-icon">📷</div>
+                                    <div class="upload-text">Add meter photo</div>
+                                    <div class="upload-hint">Optional: Helps with verification</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="progress-tracker">
+                        <div class="progress-header">
+                            <div class="progress-title">Upload Progress</div>
+                            <div class="progress-percentage">33%</div>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 33%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History Tab -->
+                <div id="history-tab" class="tab-content">
+                    <div class="section-title">
+                        🕐 Activity History
+                    </div>
+                    <div style="color: #64748b; padding: 40px; text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📜</div>
+                        <div>Activity history will appear here</div>
+                        <div style="font-size: 12px; margin-top: 8px;">Track all changes, uploads, and data entries</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <div class="footer-info">
+                    1 of 3 required files uploaded • Auto-save enabled
+                </div>
+                <div class="footer-actions">
+                    <button class="btn btn-secondary">
+                        💾 Save Draft
+                    </button>
+                    <button class="btn btn-primary">
+                        ✓ Complete Task
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function switchTab(tabName) {
+            // Remove active class from all tabs and contents
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Add active class to selected tab
+            event.target.closest('.tab').classList.add('active');
+            
+            // Show selected content
+            document.getElementById(tabName + '-tab').classList.add('active');
+        }
+
+        // File upload handling
+        let uploadedFiles = new Map();
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragging');
+        }
+        
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('dragging');
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragging');
+            
+            const files = e.dataTransfer.files;
+            processFiles(files, e.currentTarget);
+        }
+        
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            processFiles(files, e.target.closest('.upload-zone'));
+        }
+        
+        function processFiles(files, uploadZone) {
+            for (let file of files) {
+                // Validate file size (10MB max)
+                if (file.size > 10 * 1024 * 1024) {
+                    alert(`File ${file.name} is too large. Maximum size is 10MB.`);
+                    continue;
+                }
+                
+                // Create file display
+                const fileId = Date.now() + '_' + Math.random();
+                uploadedFiles.set(fileId, file);
+                
+                const fileElement = createFileElement(file, fileId);
+                const filesContainer = uploadZone.parentElement.querySelector('.uploaded-files');
+                
+                if (!filesContainer) {
+                    const newContainer = document.createElement('div');
+                    newContainer.className = 'uploaded-files';
+                    uploadZone.parentElement.appendChild(newContainer);
+                    newContainer.appendChild(fileElement);
+                } else {
+                    filesContainer.appendChild(fileElement);
+                }
+                
+                updateProgress();
+                updateMonthPill(file.name);
+            }
+        }
+        
+        function createFileElement(file, fileId) {
+            const fileDiv = document.createElement('div');
+            fileDiv.className = 'uploaded-file';
+            fileDiv.innerHTML = `
+                <div class="file-info">
+                    <div class="file-icon">${getFileIcon(file.type)}</div>
+                    <div>
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-size">${formatFileSize(file.size)} • Uploaded just now</div>
+                    </div>
+                </div>
+                <button class="remove-file" onclick="removeFile('${fileId}', this)">✕</button>
+            `;
+            return fileDiv;
+        }
+        
+        function getFileIcon(fileType) {
+            if (fileType.includes('pdf')) return '📄';
+            if (fileType.includes('image')) return '🖼️';
+            if (fileType.includes('sheet') || fileType.includes('excel')) return '📊';
+            return '📎';
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        
+        function removeFile(fileId, button) {
+            uploadedFiles.delete(fileId);
+            button.closest('.uploaded-file').remove();
+            updateProgress();
+        }
+        
+        function updateProgress() {
+            const totalRequired = 3;
+            const uploaded = uploadedFiles.size;
+            const percentage = Math.round((uploaded / totalRequired) * 100);
+            
+            document.querySelectorAll('.progress-percentage').forEach(el => {
+                el.textContent = percentage + '%';
+            });
+            document.querySelectorAll('.progress-fill').forEach(el => {
+                el.style.width = percentage + '%';
+            });
+            document.querySelector('.footer-info').textContent = 
+                `${uploaded} of ${totalRequired} required files uploaded • Auto-save enabled`;
+            
+            // Update button state
+            const completeBtn = document.querySelector('.btn-primary');
+            if (uploaded >= totalRequired) {
+                completeBtn.disabled = false;
+            } else {
+                completeBtn.disabled = true;
+            }
+        }
+        
+        function updateMonthPill(filename) {
+            // Update month pills based on filename
+            const months = ['May', 'June', 'July'];
+            months.forEach(month => {
+                if (filename.toLowerCase().includes(month.toLowerCase())) {
+                    document.querySelectorAll('.month-pill').forEach(pill => {
+                        if (pill.textContent.includes(month)) {
+                            pill.classList.add('uploaded');
+                            pill.innerHTML = '<span>✓</span> ' + pill.textContent.trim();
+                        }
+                    });
+                }
+            });
+        }
+        
+        // Show user picker
+        function showUserPicker() {
+            alert('User picker would open here to select from team members');
+        }
+        
+        // Auto-save data entries
+        document.querySelectorAll('.data-input').forEach(input => {
+            input.addEventListener('input', (e) => {
+                // Show saving indicator
+                const card = e.target.closest('.data-card');
+                const existingStatus = card.querySelector('.data-status');
+                if (existingStatus) {
+                    existingStatus.remove();
+                }
+                
+                // Simulate auto-save after typing stops
+                clearTimeout(input.saveTimeout);
+                input.saveTimeout = setTimeout(() => {
+                    const status = document.createElement('div');
+                    status.className = 'data-status';
+                    status.innerHTML = '<span>✓</span><span>Data saved</span>';
+                    card.appendChild(status);
+                    
+                    // Update progress
+                    const filledInputs = document.querySelectorAll('.data-input[value]:not([value=""])').length;
+                    const totalInputs = 3; // Required fields
+                    const percentage = Math.round((filledInputs / totalInputs) * 100);
+                    
+                    const progressBar = document.querySelector('#data-entry-tab .progress-fill');
+                    const progressText = document.querySelector('#data-entry-tab .progress-percentage');
+                    if (progressBar) progressBar.style.width = percentage + '%';
+                    if (progressText) progressText.textContent = percentage + '%';
+                }, 500);
+            });
+        });
+        
+        // Close modal
+        document.querySelector('.close-btn').addEventListener('click', () => {
+            if (confirm('Are you sure? Unsaved changes will be lost.')) {
+                document.querySelector('.modal-overlay').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

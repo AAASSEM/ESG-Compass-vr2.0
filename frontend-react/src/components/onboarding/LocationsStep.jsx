@@ -76,7 +76,7 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
     const newMeter = {
       id: `meter_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'electricity',
-      description: '',
+      description: 'Main Electricity Meter',
       meterNumber: '',
       provider: ''
     };
@@ -88,9 +88,22 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
 
   const updateMeter = (locationIndex, meterIndex, field, value) => {
     const newLocations = [...locations];
+    const updates = { [field]: value };
+    
+    // Auto-update description when meter type changes
+    if (field === 'type') {
+      const typeDescriptions = {
+        'electricity': 'Main Electricity Meter',
+        'water': 'Main Water Meter',
+        'gas': 'Main Gas Meter',
+        'other': 'Main Meter'
+      };
+      updates.description = typeDescriptions[value] || 'Main Meter';
+    }
+    
     newLocations[locationIndex].meters[meterIndex] = {
       ...newLocations[locationIndex].meters[meterIndex],
-      [field]: value
+      ...updates
     };
     setLocations(newLocations);
   };
