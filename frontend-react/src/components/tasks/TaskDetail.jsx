@@ -925,6 +925,32 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
     return cleanTitle.trim();
   };
 
+  // Helper function to format task title with user answer
+  const formatTaskTitleWithAnswer = (task) => {
+    const cleanTitle = cleanTaskTitle(task);
+    
+    // If there's a user answer, append it to the title
+    if (task.user_answer) {
+      // Format different answer types
+      let answerText = '';
+      if (typeof task.user_answer === 'boolean') {
+        answerText = task.user_answer ? 'Yes' : 'No';
+      } else if (typeof task.user_answer === 'string') {
+        // Capitalize first letter and limit length
+        answerText = task.user_answer.charAt(0).toUpperCase() + task.user_answer.slice(1);
+        if (answerText.length > 50) {
+          answerText = answerText.substring(0, 50) + '...';
+        }
+      } else {
+        answerText = String(task.user_answer);
+      }
+      
+      return `${cleanTitle} (Answer: ${answerText})`;
+    }
+    
+    return cleanTitle;
+  };
+
   if (!task) return null;
 
   const meterInfo = getMeterInfo(task);
@@ -974,7 +1000,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                 <i className={getCategoryIcon(task.category)}></i>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-text-high">{cleanTaskTitle(task)}</h3>
+                <h3 className="text-lg font-semibold text-text-high">{formatTaskTitleWithAnswer(task)}</h3>
                 <div className="flex items-center space-x-4 mt-1">
                   <span className={`text-sm font-medium ${getPriorityColor(task.priority)} flex items-center`}>
                     <span className="w-2 h-2 rounded-full bg-current mr-1"></span>

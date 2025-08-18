@@ -30,7 +30,7 @@ import {
 
 const ItemType = 'TASK';
 
-// Helper function to clean task title by removing meter information
+// Helper function to clean task title and add user answer
 const cleanTaskTitle = (task) => {
   const originalTitle = task.title;
   
@@ -38,6 +38,32 @@ const cleanTaskTitle = (task) => {
   const cleanTitle = originalTitle.replace(/\s*\(.*meter.*\)/i, '');
   
   return cleanTitle.trim();
+};
+
+// Helper function to format task title with user answer
+const formatTaskTitleWithAnswer = (task) => {
+  const cleanTitle = cleanTaskTitle(task);
+  
+  // If there's a user answer, append it to the title
+  if (task.user_answer) {
+    // Format different answer types
+    let answerText = '';
+    if (typeof task.user_answer === 'boolean') {
+      answerText = task.user_answer ? 'Yes' : 'No';
+    } else if (typeof task.user_answer === 'string') {
+      // Capitalize first letter and limit length
+      answerText = task.user_answer.charAt(0).toUpperCase() + task.user_answer.slice(1);
+      if (answerText.length > 20) {
+        answerText = answerText.substring(0, 20) + '...';
+      }
+    } else {
+      answerText = String(task.user_answer);
+    }
+    
+    return `${cleanTitle} (Answer: ${answerText})`;
+  }
+  
+  return cleanTitle;
 };
 
 // Draggable Task Card Component
@@ -83,8 +109,8 @@ const TaskCard = ({ task, onEdit, onViewDetails, isHighlighted = false }) => {
         </div>
       </div>
 
-      <h4 className="text-text-high font-medium text-sm mb-2 line-clamp-4" title={cleanTaskTitle(task)}>
-        {cleanTaskTitle(task)}
+      <h4 className="text-text-high font-medium text-sm mb-2 line-clamp-4" title={formatTaskTitleWithAnswer(task)}>
+        {formatTaskTitleWithAnswer(task)}
       </h4>
 
       {task.description && (

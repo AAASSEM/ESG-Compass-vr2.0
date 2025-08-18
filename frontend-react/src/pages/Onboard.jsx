@@ -344,11 +344,26 @@ const Onboard = () => {
   const handleESGComplete = async (results) => {
     setEsgData(results);
     
+    // Get answers from localStorage
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const companyIdKey = companyId || currentUser.company_id || 'temp';
+    const savedAnswers = localStorage.getItem(`esg_scoping_answers_${companyIdKey}`);
+    let answers = {};
+    
+    if (savedAnswers) {
+      try {
+        answers = JSON.parse(savedAnswers);
+      } catch (error) {
+        console.error('Error parsing saved answers:', error);
+      }
+    }
+    
     // Save ESG assessment data to scoping_data
     try {
       const scopingData = {
         scoping_data: {
           esg_assessment: results,
+          esg_answers: answers, // Include the actual answers
           step_3_completed: true,
           step_3_completed_at: new Date().toISOString()
         },
