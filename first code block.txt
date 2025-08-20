@@ -1,0 +1,128 @@
+// Simple fix for Tracker.jsx - Replace only the calculateProgressFromDB function
+
+const calculateProgressFromDB = () => {
+  if (!tasks || tasks.length === 0) {
+    return {
+      dataProgress: { overall: 0, completed: 0, total: 0, environmental: 0, social: 0, governance: 0 },
+      evidenceProgress: { overall: 0, completed: 0, total: 0, environmental: 0, social: 0, governance: 0 }
+    };
+  }
+  
+  let totalFilesExpected = 0;
+  let totalFilesCompleted = 0;
+  let totalDataFieldsExpected = 0;
+  let totalDataFieldsCompleted = 0;
+  
+  // Category-specific counters
+  const categoryStats = {
+    environmental: { filesExpected: 0, filesCompleted: 0, dataExpected: 0, dataCompleted: 0, total: 0, completed: 0 },
+    social: { filesExpected: 0, filesCompleted: 0, dataExpected: 0, dataCompleted: 0, total: 0, completed: 0 },
+    governance: { filesExpected: 0, filesCompleted: 0, dataExpected: 0, dataCompleted: 0, total: 0, completed: 0 }
+  };
+
+  tasks.forEach(task => {
+    const category = task.category || 'general';
+    const taskText = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
+    
+    // Count task completion
+    const isTaskCompleted = task.status === 'completed' || task.progress_percentage >= 100;
+    
+    // Simple file detection - if task mentions upload/document/bill/invoice, it needs files
+    let expectedFiles = 0;
+    if (taskText.includes('upload') || taskText.includes('bill') || taskText.includes('invoice') || 
+        taskText.includes('document') || taskText.includes('policy') || taskText.includes('certificate') ||
+        taskText.includes('photo') || taskText.includes('evidence')) {
+      // Check for monthly bills (3 files) vs single documents
+      if (taskText.includes('monthly') || taskText.includes('3 month')) {
+        expectedFiles = 3;
+      } else if (taskText.includes('photo')) {
+        expectedFiles = 2;
+      } else {
+        expectedFiles = 1;
+      }
+    }
+    
+    // Simple data field detection - if task mentions track/monitor/meter, it needs data
+    let expectedDataFields = 0;
+    if (taskText.includes('track') || taskText.includes('monitor') || taskText.includes('meter') ||
+        taskText.includes('consumption') || taskText.includes('reading')) {
+      // Skip fuel/cooling tasks - they only need files
+      if (!taskText.includes('fuel') && !taskText.includes('cooling')) {
+        // Count meter types mentioned
+        let meterCount = 0;
+        if (taskText.includes('electricity')) meterCount++;
+        if (taskText.includes('water')) meterCount++;
+        if (taskText.includes('gas')) meterCount++;
+        
+        // If meters found, assume 3 months of data per meter
+        if (meterCount > 0) {
+          expectedDataFields = meterCount * 3;
+        } else {
+          expectedDataFields = 3; // Default 3 data points
+        }
+      }
+    }
+    
+    // Count actual completions
+    const actualFiles = (task.attachments || []).length;
+    const actualDataEntries = task.data_entries ? 
+      Object.keys(task.data_entries).filter(key => task.data_entries[key] && key !== 'notes').length : 0;
+    
+    // Update totals
+    totalFilesExpected += expectedFiles;
+    totalFilesCompleted += Math.min(actualFiles, expectedFiles);
+    totalDataFieldsExpected += expectedDataFields;
+    totalDataFieldsCompleted += Math.min(actualDataEntries, expectedDataFields);
+    
+    // Update category stats
+    if (categoryStats[category]) {
+      categoryStats[category].filesExpected += expectedFiles;
+      categoryStats[category].filesCompleted += Math.min(actualFiles, expectedFiles);
+      categoryStats[category].dataExpected += expectedDataFields;
+      categoryStats[category].dataCompleted += Math.min(actualDataEntries, expectedDataFields);
+      categoryStats[category].total += 1;
+      if (isTaskCompleted) {
+        categoryStats[category].completed += 1;
+      }
+    }
+  });
+  
+  // Calculate percentages
+  const dataPercentage = totalDataFieldsExpected > 0 ? 
+    Math.round((totalDataFieldsCompleted / totalDataFieldsExpected) * 100) : 0;
+  
+  const evidencePercentage = totalFilesExpected > 0 ? 
+    Math.round((totalFilesCompleted / totalFilesExpected) * 100) : 0;
+  
+  // Calculate category percentages
+  const calculateCategoryPercentage = (category, type) => {
+    if (type === 'data') {
+      const expected = categoryStats[category]?.dataExpected || 0;
+      const completed = categoryStats[category]?.dataCompleted || 0;
+      return expected > 0 ? Math.round((completed / expected) * 100) : 0;
+    } else {
+      const expected = categoryStats[category]?.filesExpected || 0;
+      const completed = categoryStats[category]?.filesCompleted || 0;
+      return expected > 0 ? Math.round((completed / expected) * 100) : 0;
+    }
+  };
+
+  return {
+    dataProgress: {
+      overall: dataPercentage,
+      completed: totalDataFieldsCompleted,
+      total: totalDataFieldsExpected,
+      environmental: calculateCategoryPercentage('environmental', 'data'),
+      social: calculateCategoryPercentage('social', 'data'),
+      governance: calculateCategoryPercentage('governance', 'data')
+    },
+    evidenceProgress: {
+      overall: evidencePercentage,
+      completed: totalFilesCompleted,
+      total: totalFilesExpected,
+      environmental: calculateCategoryPercentage('environmental', 'file'),
+      social: calculateCategoryPercentage('social', 'file'),
+      governance: calculateCategoryPercentage('governance', 'file')
+    }
+  };
+};

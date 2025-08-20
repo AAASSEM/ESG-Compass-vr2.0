@@ -9,6 +9,7 @@ urlpatterns = [
     path('test/social/', views.test_social_dashboard, name='test_social_dashboard'),
     path('social/file-data/', views.social_file_data, name='social_file_data'),
     path('environmental/file-data/', views.environmental_file_data, name='environmental_file_data'),
+    path('environmental/combined-data/', views.combined_environmental_data, name='combined_environmental_data'),
     path('governance/file-data/', views.governance_file_data, name='governance_file_data'),
     
     # Main dashboard endpoints

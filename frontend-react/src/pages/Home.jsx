@@ -16,28 +16,21 @@ const Home = () => {
     setIsMobileMenuOpen(false);
   };
 
-  const handleDemoRequest = () => {
+  const handleDemoRequest = async () => {
     try {
       // If user is already logged in, log them out first
       if (user) {
-        logout();
+        await logout();
       }
       
-      // Small delay to ensure logout completes, then log in as demo user
-      setTimeout(() => {
-        try {
-          const result = loginDemo();
-          if (result && result.success) {
-            toast.success('Demo mode activated!');
-            navigate('/dashboard');
-          } else {
-            toast.error('Demo login failed');
-          }
-        } catch (error) {
-          console.error('Demo login error:', error);
-          toast.error('Demo login failed');
-        }
-      }, 100);
+      // Log in as demo user
+      const result = await loginDemo();
+      if (result && result.success) {
+        toast.success('Demo mode activated!');
+        navigate('/dashboard');
+      } else {
+        toast.error('Demo login failed');
+      }
       
     } catch (error) {
       console.error('Demo request error:', error);

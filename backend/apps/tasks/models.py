@@ -117,6 +117,19 @@ class Task(models.Model):
     progress_percentage = models.FloatField(default=0.0)
     completion_notes = models.TextField(blank=True)
     
+    # Data entries for data collection tasks
+    data_entries = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Data entries collected for this task'
+    )
+    
+    # Expected file count for evidence upload tasks
+    expected_files = models.IntegerField(
+        default=0,
+        help_text='Number of files expected for this task'
+    )
+    
     # Dependencies
     depends_on = models.ManyToManyField(
         'self',

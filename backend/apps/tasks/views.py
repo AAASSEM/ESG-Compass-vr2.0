@@ -212,10 +212,8 @@ class TaskViewSet(viewsets.ModelViewSet):
             uploaded_by=request.user
         )
         
-        # Update task to show it has evidence
-        if attachment.attachment_type == 'evidence':
-            task.progress_percentage = min(task.progress_percentage + 10, 100)
-            task.save()
+        # Note: Progress is calculated and updated by the frontend based on requirements
+        # No need to update progress here as it's handled by the frontend logic
         
         return Response({
             'message': 'Attachment uploaded successfully',
@@ -730,3 +728,4 @@ def sync_frontend_tasks(request):
     else:
         logger.info(f"Task sync successful: {len(created_tasks) + len(updated_tasks)} tasks synced for company {request.user.company.name}")
         return Response(response_data, status=status.HTTP_200_OK)
+

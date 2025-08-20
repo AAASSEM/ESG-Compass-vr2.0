@@ -5,9 +5,12 @@ import Layout from '../components/layout/Layout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { esgAPI } from '../services/api';
+import { progressLogger } from '../utils/progress_logging';
+import { getTaskRequirements, extractDataFields, extractRequiredDocuments } from '../utils/taskFieldExtraction';
 
 const Tracker = () => {
   const [viewMode, setViewMode] = useState('data'); // 'data' or 'evidence'
+  const [version, setVersion] = useState(0); // force re-render when log updates
   const navigate = useNavigate();
 
   // Load real progress data from API
@@ -27,6 +30,64 @@ const Tracker = () => {
     }
   );
 
+  // Set current user for ProgressLogger isolation
+  React.useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (user && user.email) {
+      progressLogger.setUser(user);
+    }
+  }, []);
+
+  // Helper function to get user's actual meters from location data
+  const getUserMeters = () => {
+    const availableMeters = { electricity: false, water: false, gas: false };
+    
+    if (company?.scoping_data?.locations) {
+      company.scoping_data.locations.forEach(location => {
+        if (location.meters) {
+          location.meters.forEach(meter => {
+            if (meter.type === 'electricity') availableMeters.electricity = true;
+            if (meter.type === 'water') availableMeters.water = true;
+            if (meter.type === 'gas') availableMeters.gas = true;
+          });
+        }
+      });
+    }
+    
+    return availableMeters;
+  };
+
+  // Keep log in sync with latest DB state (enhanced sync)
+  React.useEffect(() => {
+    if (tasks && tasks.length > 0) {
+      console.log('🔄 SYNCING ProgressLogger with database tasks...');
+      const changed = progressLogger.syncWithDatabase(tasks);
+      if (changed) {
+        console.log('✅ ProgressLogger updated from database');
+        setVersion(v => v + 1);
+      } else {
+        console.log('📊 ProgressLogger already in sync');
+      }
+    }
+  }, [tasks]);
+
+
+
+  // Override required file counts in the log based on shared utilities
+  React.useEffect(() => {
+    if (!tasks || tasks.length === 0) return;
+    let changed = false;
+    tasks.forEach(task => {
+      const requirements = getTaskRequirements(task);
+      const requiredCount = requirements.expectedFiles;
+      const before = progressLogger.getLog().tasks?.[task.id]?.files?.required;
+      progressLogger.updateRequiredFiles(task.id, requiredCount);
+      const after = progressLogger.getLog().tasks?.[task.id]?.files?.required;
+      if (before !== after) changed = true;
+    });
+    if (changed) setVersion(v => v + 1);
+  }, [tasks]);
+
   const { data: progressData, error: progressError, isLoading: progressLoading } = useQuery(
     'progress-tracker',
     () => esgAPI.getProgressTracker(),
@@ -41,7 +102,7 @@ const Tracker = () => {
     hasCompany: !!company
   });
 
-  // Calculate progress from DATABASE/API task data - NO localStorage
+  // Calculate progress using shared utilities - NO localStorage
   const calculateProgressFromDB = () => {
     if (!tasks || tasks.length === 0) {
       return {
@@ -57,225 +118,109 @@ const Tracker = () => {
     
     // Category-specific counters
     const categoryStats = {
-      environmental: { filesExpected: 0, filesCompleted: 0, dataExpected: 0, dataCompleted: 0 },
-      social: { filesExpected: 0, filesCompleted: 0, dataExpected: 0, dataCompleted: 0 },
-      governance: { filesExpected: 0, filesCompleted: 0, dataExpected: 0, dataCompleted: 0 }
+      environmental: { filesExpected: 0, filesCompleted: 0, dataExpected: 0, dataCompleted: 0, total: 0, completed: 0 },
+      social: { filesExpected: 0, filesCompleted: 0, dataExpected: 0, dataCompleted: 0, total: 0, completed: 0 },
+      governance: { filesExpected: 0, filesCompleted: 0, dataExpected: 0, dataCompleted: 0, total: 0, completed: 0 }
     };
 
-    console.log('📊 TRACKER: Calculating progress from DATABASE tasks (no localStorage)...');
-    
     tasks.forEach(task => {
       const category = task.category || 'general';
       
-      // Get evidence requirements for this task  
-      const evidenceInfo = getEvidenceTypeInfo(task.action_required || '', task.title || '');
+      // Use shared utility to get task requirements
+      const requirements = getTaskRequirements(task);
+      const expectedFiles = requirements.expectedFiles;
+      const expectedDataFields = requirements.expectedDataFields;
       
-      // Determine task completion from DATABASE status and attachments
-      const taskAttachments = task.attachments || [];
+      // Count task completion
       const isTaskCompleted = task.status === 'completed' || task.progress_percentage >= 100;
       
-      // Debug task data from database
-      console.log(`📋 DB Task: ${task.title?.slice(0, 40)}`);
-      console.log(`  - Status: ${task.status}`);
-      console.log(`  - Progress: ${task.progress_percentage}%`);
-      console.log(`  - Completed: ${isTaskCompleted}`);
-      console.log(`  - Attachments: ${taskAttachments.length}`);
-      console.log(`  - Evidence Type: ${evidenceInfo.type}`);
+      // Count actual completions
+      const actualFiles = (task.attachments || []).length;
+      const actualDataEntries = task.data_entries ? 
+        Object.keys(task.data_entries).filter(key => 
+          task.data_entries[key] && 
+          key !== 'notes' && 
+          !key.includes('cost')
+        ).length : 0;
       
+      // Update totals
+      totalFilesExpected += expectedFiles;
+      totalFilesCompleted += Math.min(actualFiles, expectedFiles);
+      totalDataFieldsExpected += expectedDataFields;
+      totalDataFieldsCompleted += Math.min(actualDataEntries, expectedDataFields);
       
-      // Count actual FILES expected and uploaded (not just tasks)
-      if (evidenceInfo.type === 'file') {
-        // File upload task - count expected files and actual files uploaded
-        const expectedFileCount = evidenceInfo.expectedCount || 1;
-        totalFilesExpected += expectedFileCount;
-        
-        // Count actual files uploaded for this task
-        const actualFilesUploaded = taskAttachments.length;
-        totalFilesCompleted += Math.min(actualFilesUploaded, expectedFileCount);
-        
-        console.log(`  - Expected ${expectedFileCount} files, uploaded ${actualFilesUploaded}`);
-        
-        if (categoryStats[category]) {
-          categoryStats[category].filesExpected += expectedFileCount;
-          categoryStats[category].filesCompleted += Math.min(actualFilesUploaded, expectedFileCount);
-        }
-      } else if (evidenceInfo.type === 'data') {
-        // Data entry task - count tasks completed
-        totalDataFieldsExpected += 1;
+      // Update category stats
+      if (categoryStats[category]) {
+        categoryStats[category].filesExpected += expectedFiles;
+        categoryStats[category].filesCompleted += Math.min(actualFiles, expectedFiles);
+        categoryStats[category].dataExpected += expectedDataFields;
+        categoryStats[category].dataCompleted += Math.min(actualDataEntries, expectedDataFields);
+        categoryStats[category].total += 1;
         if (isTaskCompleted) {
-          totalDataFieldsCompleted += 1;
-        }
-        
-        console.log(`  - Data entry task, completed: ${isTaskCompleted}`);
-        
-        if (categoryStats[category]) {
-          categoryStats[category].dataExpected += 1;
-          if (isTaskCompleted) {
-            categoryStats[category].dataCompleted += 1;
-          }
-        }
-      } else if (evidenceInfo.type === 'mixed') {
-        // Mixed task - check what was actually submitted
-        if (taskAttachments.length > 0) {
-          // Has files, count as file uploads
-          const expectedFileCount = evidenceInfo.expectedCount || 1;
-          totalFilesExpected += expectedFileCount;
-          
-          const actualFilesUploaded = taskAttachments.length;
-          totalFilesCompleted += Math.min(actualFilesUploaded, expectedFileCount);
-          
-          console.log(`  - Mixed task with files: expected ${expectedFileCount}, uploaded ${actualFilesUploaded}`);
-          
-          if (categoryStats[category]) {
-            categoryStats[category].filesExpected += expectedFileCount;
-            categoryStats[category].filesCompleted += Math.min(actualFilesUploaded, expectedFileCount);
-          }
-        } else {
-          // No files, treat as data entry
-          totalDataFieldsExpected += 1;
-          if (isTaskCompleted) {
-            totalDataFieldsCompleted += 1;
-          }
-          
-          console.log(`  - Mixed task with data entry, completed: ${isTaskCompleted}`);
-          
-          if (categoryStats[category]) {
-            categoryStats[category].dataExpected += 1;
-            if (isTaskCompleted) {
-              categoryStats[category].dataCompleted += 1;
-            }
-          }
+          categoryStats[category].completed += 1;
         }
       }
     });
     
-    // Calculate overall percentages from DATABASE completion status
+    // Calculate percentages
     const dataPercentage = totalDataFieldsExpected > 0 ? 
-      (totalDataFieldsCompleted / totalDataFieldsExpected) * 100 : 0;
+      Math.round((totalDataFieldsCompleted / totalDataFieldsExpected) * 100) : 0;
     
     const evidencePercentage = totalFilesExpected > 0 ? 
-      (totalFilesCompleted / totalFilesExpected) * 100 : 0;
+      Math.round((totalFilesCompleted / totalFilesExpected) * 100) : 0;
     
-    // Calculate category percentages from DATABASE
+    // Calculate category percentages
     const calculateCategoryPercentage = (category, type) => {
       if (type === 'data') {
         const expected = categoryStats[category]?.dataExpected || 0;
         const completed = categoryStats[category]?.dataCompleted || 0;
-        return expected > 0 ? (completed / expected) * 100 : 0;
+        return expected > 0 ? Math.round((completed / expected) * 100) : 0;
       } else {
         const expected = categoryStats[category]?.filesExpected || 0;
         const completed = categoryStats[category]?.filesCompleted || 0;
-        return expected > 0 ? (completed / expected) * 100 : 0;
+        return expected > 0 ? Math.round((completed / expected) * 100) : 0;
       }
     };
-
-    console.log('📊 TRACKER TOTALS FROM DATABASE:');
-    console.log(`  Data Tasks: ${totalDataFieldsCompleted}/${totalDataFieldsExpected} (${Math.round(dataPercentage)}%)`);
-    console.log(`  File Tasks: ${totalFilesCompleted}/${totalFilesExpected} (${Math.round(evidencePercentage)}%)`);
-    console.log('📊 CATEGORY BREAKDOWN FROM DATABASE:');
-    console.log('  Environmental:', categoryStats.environmental);
-    console.log('  Social:', categoryStats.social);
-    console.log('  Governance:', categoryStats.governance);
 
     return {
       dataProgress: {
-        overall: Math.round(dataPercentage),
+        overall: dataPercentage,
         completed: totalDataFieldsCompleted,
         total: totalDataFieldsExpected,
-        environmental: Math.round(calculateCategoryPercentage('environmental', 'data')),
-        social: Math.round(calculateCategoryPercentage('social', 'data')),
-        governance: Math.round(calculateCategoryPercentage('governance', 'data'))
+        environmental: calculateCategoryPercentage('environmental', 'data'),
+        social: calculateCategoryPercentage('social', 'data'),
+        governance: calculateCategoryPercentage('governance', 'data')
       },
       evidenceProgress: {
-        overall: Math.round(evidencePercentage),
+        overall: evidencePercentage,
         completed: totalFilesCompleted,
         total: totalFilesExpected,
-        environmental: Math.round(calculateCategoryPercentage('environmental', 'file')),
-        social: Math.round(calculateCategoryPercentage('social', 'file')),
-        governance: Math.round(calculateCategoryPercentage('governance', 'file'))
+        environmental: calculateCategoryPercentage('environmental', 'file'),
+        social: calculateCategoryPercentage('social', 'file'),
+        governance: calculateCategoryPercentage('governance', 'file')
       }
     };
-    
-    // Helper function for evidence type detection (same as TaskDetail)
-    function getEvidenceTypeInfo(dataSource, taskTitle = '') {
-      const dataSourceLower = dataSource.toLowerCase();
-      const titleLower = taskTitle.toLowerCase();
-      const combined = `${dataSourceLower} ${titleLower}`;
-      
-      // Check for flexible evidence FIRST (user's choice between data or file)
-      if (combined.includes('flexible evidence') || 
-          combined.includes('your choice') || 
-          combined.includes('flexible') && combined.includes('evidence') ||
-          combined.includes('choice') && combined.includes('evidence')) {
-        return { type: 'mixed', expectedCount: 1 };
-      }
-      
-      // Check for utility bills FIRST (before meter detection)
-      if (combined.includes('bills') || combined.includes('invoices')) {
-        return { type: 'file', expectedCount: 3 };
-      }
-      
-      // Meter-related tasks should support data entry (but NOT if it's mainly about IAQ/air quality)
-      if ((combined.includes('meter') || combined.includes('dewa') || combined.includes('addc')) && 
-          (combined.includes('track') || combined.includes('monitor') || combined.includes('consumption')) &&
-          !combined.includes('air quality') && !combined.includes('iaq') && !combined.includes('indoor air')) {
-        return { type: 'mixed', expectedCount: 1 }; // Support both data and files
-      }
-      
-      // Data entry tasks - look for numeric/measurement keywords
-      if (combined.includes('enter') || 
-          combined.includes('percentage') ||
-          combined.includes('kwh') || 
-          combined.includes('m³') ||
-          combined.includes('gallons') ||
-          combined.includes('liters') ||
-          combined.includes('tons') ||
-          combined.includes('degrees') ||
-          combined.includes('ppm') ||
-          combined.includes('measurement') ||
-          (combined.includes('track') && (combined.includes('consumption') || combined.includes('usage') || combined.includes('amount'))) ||
-          (combined.includes('monitor') && (combined.includes('level') || combined.includes('quality') || combined.includes('temperature')))) {
-        return { type: 'data', expectedCount: 1 };
-      }
-      
-      // File upload patterns
-      if (combined.includes('upload') || 
-          combined.includes('bills') || 
-          combined.includes('invoices') ||
-          combined.includes('photo') ||
-          combined.includes('picture') ||
-          combined.includes('document') ||
-          combined.includes('policy') ||
-          combined.includes('certificate') ||
-          combined.includes('records') || 
-          combined.includes('logs') ||
-          combined.includes('evidence') ||
-          combined.includes('proof') ||
-          combined.includes('signed')) {
-        
-        if (combined.includes('bills') || combined.includes('invoices')) {
-          return { type: 'file', expectedCount: 3 };
-        } else if (combined.includes('photo') || combined.includes('picture')) {
-          // Check if it's mixed content (photos + documents) 
-          if (combined.includes('agreement') || combined.includes('contract') || combined.includes('document')) {
-            return { type: 'file', expectedCount: 2 }; // Accept all file types for mixed content
-          } else {
-            return { type: 'file', expectedCount: 2 }; // Photo-only tasks
-          }
-        } else {
-          return { type: 'file', expectedCount: 1 };
-        }
-      }
-      
-      // Default to file upload if unclear
-      return { type: 'file', expectedCount: 1 };
-    }
   };
 
-  // Use DATABASE task completion status (NO localStorage)
-  const progress = calculateProgressFromDB();
+  // Read progress from centralized log (counts files and data entries) with enhanced DB sync
+  const logSummary = progressLogger.getProgressSummary();
+  const isLogEmpty = !logSummary?.taskSummary || logSummary.taskSummary.total === 0;
   
-  console.log('📊 PROGRESS TRACKER: Using DATABASE task completion status (NO localStorage)');
+  // Use ProgressLogger as primary source, with DB calculation as fallback for accuracy
+  const progress = !isLogEmpty ? logSummary : calculateProgressFromDB();
+  
+  console.log('📊 PROGRESS SOURCE:', !isLogEmpty ? 'PROGRESS LOGGER' : 'DATABASE FALLBACK');
+  
+  if (!isLogEmpty) {
+    console.log('✅ Using ProgressLogger - Real-time tracking with localStorage');
+    console.log('📊 ProgressLogger Summary:', {
+      dataProgress: `${progress.dataProgress.completed}/${progress.dataProgress.total} (${progress.dataProgress.overall}%)`,
+      evidenceProgress: `${progress.evidenceProgress.completed}/${progress.evidenceProgress.total} (${progress.evidenceProgress.overall}%)`,
+      taskSummary: progress.taskSummary
+    });
+  } else {
+    console.log('🔄 Using Database Fallback - Direct calculation from API data');
+  }
   console.log('📊 Data vs Evidence separation from DATABASE:', {
     dataFields: `${progress.dataProgress.completed}/${progress.dataProgress.total} fields`,
     evidenceFiles: `${progress.evidenceProgress.completed}/${progress.evidenceProgress.total} files`
@@ -294,169 +239,103 @@ const Tracker = () => {
     });
   }
 
-  // Generate dynamic metrics from DATABASE task completion (NO localStorage)
-  // Filter by both category AND evidence type based on viewMode
-  const getMetricsByCategory = (category) => {
+  // Generate dynamic metrics using shared utilities and viewMode
+  const getMetricsByCategory = (category, currentViewMode) => {
     if (!tasks || tasks.length === 0) {
-      return [
-        { name: 'No tasks available', status: 'pending' }
-      ];
+      return [{ name: 'No tasks available', status: 'pending', evidence: '' }];
     }
 
     const categoryTasks = tasks.filter(task => 
       task.category === category || task.title.toLowerCase().includes(category.toLowerCase())
     );
 
-    // Filter by evidence type based on current viewMode
-    const filteredTasks = categoryTasks.filter(task => {
-      const evidenceInfo = getEvidenceTypeInfo(task.action_required || '', task.title || '');
-      
-      if (viewMode === 'data') {
-        // Show only data entry tasks
-        return evidenceInfo.type === 'data' || evidenceInfo.type === 'mixed';
-      } else if (viewMode === 'evidence') {
-        // Show only file upload tasks
-        return evidenceInfo.type === 'file' || evidenceInfo.type === 'mixed';
-      }
-      
-      return true; // fallback
-    });
-
-    if (filteredTasks.length === 0) {
-      return [
-        { name: `No ${viewMode === 'data' ? 'data entry' : 'file upload'} tasks`, status: 'pending' }
-      ];
+    if (categoryTasks.length === 0) {
+      return [{ name: `No ${category} tasks`, status: 'pending', evidence: '' }];
     }
 
-    // Helper function for evidence type detection (same as calculateProgress)
-    function getEvidenceTypeInfo(dataSource, taskTitle = '') {
-      const dataSourceLower = dataSource.toLowerCase();
-      const titleLower = taskTitle.toLowerCase();
-      const combined = `${dataSourceLower} ${titleLower}`;
+    // Show first 4 tasks with their actual progress
+    return categoryTasks.slice(0, 4).map(task => {
+      // Use shared utilities to determine task requirements
+      const requirements = getTaskRequirements(task);
+      const needsFiles = requirements.expectedFiles > 0;
+      const needsData = requirements.expectedDataFields > 0;
       
-      // Check for utility bills FIRST (before meter detection)
-      if (combined.includes('bills') || combined.includes('invoices')) {
-        return { type: 'file', expectedCount: 3 };
-      }
+      // Get actual progress
+      const attachments = (task.attachments || []).length;
+      const dataEntries = task.data_entries ? 
+        Object.keys(task.data_entries).filter(key => 
+          task.data_entries[key] && 
+          key !== 'notes' && 
+          !key.includes('cost')
+        ).length : 0;
       
-      // Meter-related tasks should support data entry (but NOT if it's mainly about IAQ/air quality)
-      if ((combined.includes('meter') || combined.includes('dewa') || combined.includes('addc')) && 
-          (combined.includes('track') || combined.includes('monitor') || combined.includes('consumption')) &&
-          !combined.includes('air quality') && !combined.includes('iaq') && !combined.includes('indoor air')) {
-        return { type: 'mixed', expectedCount: 1 };
-      }
+      let status = 'pending';
+      let evidenceCount = '';
       
-      // File upload tasks
-      if (combined.includes('upload') || 
-          combined.includes('bills') || 
-          combined.includes('invoices') || 
-          combined.includes('document') ||
-          combined.includes('policy') ||
-          combined.includes('certificate') ||
-          combined.includes('records') || 
-          combined.includes('logs') ||
-          combined.includes('photo') ||
-          combined.includes('evidence')) {
+      if (task.status === 'completed' || task.progress_percentage >= 100) {
+        status = 'complete';
         
-        if (combined.includes('bills') || combined.includes('invoices')) {
-          return { type: 'file', expectedCount: 3 };
-        } else if (combined.includes('photo')) {
-          // Check if it's mixed content (photos + documents)
-          if (combined.includes('agreement') || combined.includes('contract')) {
-            return { type: 'file', expectedCount: 2 };
+        // Show completion based on view mode
+        if (currentViewMode === 'data') {
+          if (needsData) {
+            evidenceCount = `${dataEntries}/${requirements.expectedDataFields} data`;
           } else {
-            return { type: 'file', expectedCount: 2 };
+            evidenceCount = 'No data needed';
           }
-        } else if (combined.includes('records') || combined.includes('logs')) {
-          return { type: 'file', expectedCount: 2 };
-        } else {
-          return { type: 'file', expectedCount: 1 };
-        }
-      }
-      
-      // Data entry tasks
-      if (combined.includes('enter') || 
-          combined.includes('percentage') ||
-          combined.includes('kwh') || 
-          combined.includes('m³') ||
-          combined.includes('gallons') ||
-          combined.includes('liters') ||
-          combined.includes('tons') ||
-          combined.includes('degrees') ||
-          combined.includes('ppm') ||
-          combined.includes('measurement') ||
-          (combined.includes('track') && (combined.includes('consumption') || combined.includes('usage') || combined.includes('amount'))) ||
-          (combined.includes('monitor') && (combined.includes('level') || combined.includes('quality') || combined.includes('temperature')))) {
-        return { type: 'data', expectedCount: 1 };
-      }
-      
-      return { type: 'file', expectedCount: 1 };
-    }
-
-    return filteredTasks.slice(0, 4).map(task => {
-      // Use DATABASE task completion status (NO localStorage)
-      const taskAttachments = task.attachments || [];
-      const isTaskCompleted = task.status === 'completed' || task.progress_percentage >= 100;
-      
-      const evidenceInfo = getEvidenceTypeInfo(task.action_required || '', task.title || '');
-      let taskStatus = 'pending';
-      let evidenceCount;
-      
-      if (evidenceInfo.type === 'file') {
-        // File upload task
-        const expectedFiles = evidenceInfo.expectedCount || 1;
-        const uploadedFiles = taskAttachments.length;
-        
-        if (uploadedFiles >= expectedFiles) {
-          taskStatus = 'complete';
-        } else if (uploadedFiles > 0) {
-          taskStatus = 'in_progress';
-        }
-        
-        evidenceCount = `${uploadedFiles}/${expectedFiles} files`;
-        
-      } else if (evidenceInfo.type === 'data') {
-        // Data entry task
-        if (isTaskCompleted) {
-          taskStatus = 'complete';
-          evidenceCount = '1/1 data entry';
-        } else {
-          evidenceCount = '0/1 data entry';
-        }
-        
-      } else if (evidenceInfo.type === 'mixed') {
-        // Mixed task
-        const expectedCount = evidenceInfo.expectedCount || 1;
-        
-        if (taskAttachments.length > 0) {
-          // Has files
-          const uploadedFiles = taskAttachments.length;
-          if (uploadedFiles >= expectedCount) {
-            taskStatus = 'complete';
-          } else if (uploadedFiles > 0) {
-            taskStatus = 'in_progress';
+        } else { // evidence mode
+          if (needsFiles) {
+            evidenceCount = `${attachments}/${requirements.expectedFiles} files`;
+          } else {
+            evidenceCount = 'No files needed';
           }
-          evidenceCount = `${uploadedFiles}/${expectedCount} files`;
-        } else if (isTaskCompleted) {
-          // Data entry completed
-          taskStatus = 'complete';
-          evidenceCount = '1/1 data entry';
-        } else {
-          evidenceCount = `0/${expectedCount} files or data`;
+        }
+      } else {
+        // In progress or pending - show current progress vs required
+        if (currentViewMode === 'data') {
+          if (needsData) {
+            evidenceCount = `${dataEntries}/${requirements.expectedDataFields} data`;
+            // Complete if we have all required data entries
+            if (dataEntries >= requirements.expectedDataFields) {
+              status = 'complete';
+            } else if (dataEntries > 0) {
+              status = 'in_progress';
+            } else {
+              status = 'pending';
+            }
+          } else {
+            evidenceCount = 'No data needed';
+            status = 'complete'; // Task complete for data if no data needed
+          }
+        } else { // evidence mode
+          if (needsFiles) {
+            evidenceCount = `${attachments}/${requirements.expectedFiles} files`;
+            // Complete if we have all required files
+            if (attachments >= requirements.expectedFiles) {
+              status = 'complete';
+            } else if (attachments > 0) {
+              status = 'in_progress';
+            } else {
+              status = 'pending';
+            }
+          } else {
+            evidenceCount = 'No files needed';
+            status = 'complete'; // Task complete for files if no files needed
+          }
         }
       }
       
       return {
         name: task.title.length > 30 ? task.title.substring(0, 30) + '...' : task.title,
-        status: taskStatus,
+        status: status,
         evidence: evidenceCount
       };
     });
   };
 
-  const environmentalMetrics = getMetricsByCategory('environmental');
-  const socialMetrics = getMetricsByCategory('social');  
-  const governanceMetrics = getMetricsByCategory('governance');
+  // Use database calculation with proper viewMode support
+  const environmentalMetrics = getMetricsByCategory('environmental', viewMode);
+  const socialMetrics = getMetricsByCategory('social', viewMode);
+  const governanceMetrics = getMetricsByCategory('governance', viewMode);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -471,79 +350,58 @@ const Tracker = () => {
     }
   };
 
-  // Generate dynamic next steps from DATABASE task completion (NO localStorage)
-  const getNextSteps = () => {
+
+
+  // Generate next steps from actual database task data
+  const getNextStepsFromDB = () => {
     if (!tasks || tasks.length === 0) {
       return [{
+        id: 'no-tasks',
         title: 'No active tasks',
         description: 'All tasks are up to date',
         priority: 'low',
         action: 'Dashboard',
         icon: 'fa-check',
-        color: 'green'
+        color: 'green',
+        isCompleted: true
       }];
     }
 
-    // Check for completed tasks using DATABASE completion status
-    const completedTasks = tasks.filter(task => {
-      const isTaskCompleted = task.status === 'completed' || task.progress_percentage >= 100;
-      const taskAttachments = task.attachments || [];
-      const evidenceInfo = getEvidenceTypeInfo(task.action_required || '', task.title || '');
-      
-      if (evidenceInfo.type === 'file') {
-        // File task: check if enough files uploaded
-        const expectedFiles = evidenceInfo.expectedCount || 1;
-        return taskAttachments.length >= expectedFiles;
-      } else if (evidenceInfo.type === 'data') {
-        // Data task: check completion status
-        return isTaskCompleted;
-      } else if (evidenceInfo.type === 'mixed') {
-        // Mixed task: completed if has files OR is marked complete
-        const expectedFiles = evidenceInfo.expectedCount || 1;
-        return taskAttachments.length >= expectedFiles || isTaskCompleted;
+    // Find incomplete tasks using shared utilities
+    const incompleteTasks = tasks.filter(task => {
+      if (task.status === 'completed' || task.progress_percentage >= 100) {
+        return false;
       }
       
-      return isTaskCompleted;
+      const requirements = getTaskRequirements(task);
+      const actualFiles = (task.attachments || []).length;
+      const actualDataEntries = task.data_entries ? 
+        Object.keys(task.data_entries).filter(key => 
+          task.data_entries[key] && 
+          key !== 'notes' && 
+          !key.includes('cost')
+        ).length : 0;
+      
+      // Task is incomplete if it needs more files or data
+      return actualFiles < requirements.expectedFiles || actualDataEntries < requirements.expectedDataFields;
     });
 
-    // Check if ALL tasks are completed
-    const allTasksCompleted = tasks.length > 0 && completedTasks.length === tasks.length;
-    
-    if (allTasksCompleted) {
-      // Show general completion message when everything is done
+    if (incompleteTasks.length === 0) {
       return [{
         id: 'all-completed',
         title: '🎉 All Tasks Completed!',
-        description: 'Congratulations! You have successfully completed all ESG compliance tasks. Your data is ready for comprehensive reporting.',
+        description: 'Congratulations! You have successfully completed all ESG compliance tasks.',
         priority: 'completed',
         action: 'Generate Reports',
         icon: 'fa-trophy',
         color: 'green',
         isCompleted: true,
-        onClick: () => window.location.href = '/reports'
+        onClick: () => navigate('/reports')
       }];
     }
 
-    // Show pending and in-progress tasks if not all completed
-    const pendingTasks = tasks.filter(task => {
-      const isTaskCompleted = task.status === 'completed' || task.progress_percentage >= 100;
-      const taskAttachments = task.attachments || [];
-      const evidenceInfo = getEvidenceTypeInfo(task.action_required || '', task.title || '');
-      
-      if (evidenceInfo.type === 'file') {
-        const expectedFiles = evidenceInfo.expectedCount || 1;
-        return taskAttachments.length < expectedFiles;
-      } else if (evidenceInfo.type === 'data') {
-        return !isTaskCompleted;
-      } else if (evidenceInfo.type === 'mixed') {
-        const expectedFiles = evidenceInfo.expectedCount || 1;
-        return taskAttachments.length < expectedFiles && !isTaskCompleted;
-      }
-      
-      return !isTaskCompleted;
-    }).slice(0, 3);
-    
-    const regularNextSteps = pendingTasks.map(task => ({
+    // Show first 3 incomplete tasks
+    return incompleteTasks.slice(0, 3).map(task => ({
       id: task.id,
       title: task.title,
       description: task.description || `${task.category} compliance task`,
@@ -556,91 +414,15 @@ const Tracker = () => {
              task.category === 'social' ? 'blue' : 'yellow',
       isCompleted: false
     }));
-
-    return regularNextSteps;
   };
 
-  // Helper function for evidence type detection (same as calculateProgress)
-  function getEvidenceTypeInfo(dataSource, taskTitle = '') {
-    const dataSourceLower = dataSource.toLowerCase();
-    const titleLower = taskTitle.toLowerCase();
-    const combined = `${dataSourceLower} ${titleLower}`;
-    
-    // Check for flexible evidence FIRST (user's choice between data or file)
-    if (combined.includes('flexible evidence') || 
-        combined.includes('your choice') || 
-        combined.includes('flexible') && combined.includes('evidence') ||
-        combined.includes('choice') && combined.includes('evidence')) {
-      return { type: 'mixed', expectedCount: 1 };
-    }
-    
-    // Check for utility bills FIRST (before meter detection)
-    if (combined.includes('bills') || combined.includes('invoices')) {
-      return { type: 'file', expectedCount: 3 };
-    }
-    
-    // Meter-related tasks should support data entry (but NOT if it's mainly about IAQ/air quality)
-    if ((combined.includes('meter') || combined.includes('dewa') || combined.includes('addc')) && 
-        (combined.includes('track') || combined.includes('monitor') || combined.includes('consumption')) &&
-        !combined.includes('air quality') && !combined.includes('iaq') && !combined.includes('indoor air')) {
-      return { type: 'mixed', expectedCount: 1 };
-    }
-    
-    // Data entry tasks - look for numeric/measurement keywords
-    if (combined.includes('enter') || 
-        combined.includes('percentage') ||
-        combined.includes('kwh') || 
-        combined.includes('m³') ||
-        combined.includes('gallons') ||
-        combined.includes('liters') ||
-        combined.includes('tons') ||
-        combined.includes('degrees') ||
-        combined.includes('ppm') ||
-        combined.includes('measurement') ||
-        (combined.includes('track') && (combined.includes('consumption') || combined.includes('usage') || combined.includes('amount'))) ||
-        (combined.includes('monitor') && (combined.includes('level') || combined.includes('quality') || combined.includes('temperature')))) {
-      return { type: 'data', expectedCount: 1 };
-    }
-    
-    // File upload patterns
-    if (combined.includes('upload') || 
-        combined.includes('bills') || 
-        combined.includes('invoices') ||
-        combined.includes('photo') ||
-        combined.includes('picture') ||
-        combined.includes('document') ||
-        combined.includes('policy') ||
-        combined.includes('certificate') ||
-        combined.includes('records') || 
-        combined.includes('logs') ||
-        combined.includes('evidence') ||
-        combined.includes('proof') ||
-        combined.includes('signed')) {
-      
-      if (combined.includes('bills') || combined.includes('invoices')) {
-        return { type: 'file', expectedCount: 3 };
-      } else if (combined.includes('photo') || combined.includes('picture')) {
-        // Check if it's mixed content (photos + documents) 
-        if (combined.includes('agreement') || combined.includes('contract') || combined.includes('document')) {
-          return { type: 'file', expectedCount: 2 }; // Accept all file types for mixed content
-        } else {
-          return { type: 'file', expectedCount: 2 }; // Photo-only tasks
-        }
-      } else {
-        return { type: 'file', expectedCount: 1 };
-      }
-    }
-    
-    // Default to file upload if unclear
-    return { type: 'file', expectedCount: 1 };
-  }
-
-  const nextSteps = getNextSteps();
+  const nextSteps = getNextStepsFromDB();
 
   const handleTaskAction = (taskId) => {
     // Navigate to tasks page with specific task highlighted
     navigate(`/tasks?highlight=${taskId}`);
   };
+
 
   return (
     <Layout>
@@ -757,7 +539,7 @@ const Tracker = () => {
                     : 'bg-white/10 text-text-muted hover:bg-white/20'
                 }`}
               >
-                Data
+                Data Entry
               </button>
               <button 
                 onClick={() => setViewMode('evidence')}
@@ -767,11 +549,11 @@ const Tracker = () => {
                     : 'bg-white/10 text-text-muted hover:bg-white/20'
                 }`}
               >
-                Evidence
+                File Uploads
               </button>
             </div>
           </div>
-          
+
           <div className="space-y-6">
             {/* Environmental Metrics */}
             <div className="space-y-4">

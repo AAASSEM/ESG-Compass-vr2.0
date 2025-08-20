@@ -234,16 +234,22 @@ const ESGScopingWizard = ({ companyId, businessSector, onComplete, onBack, isVie
   };
 
   const handleNext = () => {
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
     if (currentCategory < categories.length - 1) {
-      setCurrentCategory(currentCategory + 1);
+      setCurrentCategory(prev => prev + 1);
     } else {
       handleComplete();
     }
   };
 
   const handlePrevious = () => {
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
     if (currentCategory > 0) {
-      setCurrentCategory(currentCategory - 1);
+      setCurrentCategory(prev => prev - 1);
     }
   };
 

@@ -19,6 +19,7 @@ urlpatterns = [
     
     # Demo request (from login.html)
     path('demo-request/', views.demo_request, name='demo_request'),
+    path('demo-login/', views.demo_login, name='demo_login'),
     
     # Password reset
     path('password-reset/', views.password_reset_request, name='password_reset_request'),

@@ -18,6 +18,7 @@ import TaskDetail from '../components/tasks/TaskDetail';
 import UserAvatar from '../components/ui/UserAvatar';
 import { useAuth } from '../contexts/AuthContext';
 import { esgAPI } from '../services/api';
+import { progressLogger } from '../utils/progress_logging';
 import { 
   getCategoryIcon, 
   getCategoryColor, 
@@ -60,7 +61,7 @@ const formatTaskTitleWithAnswer = (task) => {
       answerText = String(task.user_answer);
     }
     
-    return `${cleanTitle} (Answer: ${answerText})`;
+    return `${cleanTitle} - Your answer: ✓ ${answerText}`;
   }
   
   return cleanTitle;
@@ -113,11 +114,35 @@ const TaskCard = ({ task, onEdit, onViewDetails, isHighlighted = false }) => {
         {formatTaskTitleWithAnswer(task)}
       </h4>
 
-      {task.description && (
-        <p className="text-text-muted text-xs mb-3 line-clamp-2">
-          {task.description}
-        </p>
-      )}
+      {task.description && (() => {
+        // Clean description for tasks that shouldn't have meter information
+        const taskText = `${task?.title || ''} ${task?.description || ''}`.toLowerCase();
+        let description = task.description;
+        
+        // Replace meter description for cooling tasks
+        if ((taskText.includes('cooling') || taskText.includes('district cooling')) && 
+            description.includes('Specific Meters to Track')) {
+          description = 'Collect monthly district cooling service bills to track energy consumption and costs for Scope 2 emissions reporting.';
+        }
+        
+        // Replace meter description for fuel tasks  
+        else if ((taskText.includes('fuel') || taskText.includes('generator') || 
+             taskText.includes('diesel') || taskText.includes('petrol')) && 
+            description.includes('Specific Meters to Track')) {
+          description = 'Collect fuel purchase receipts and consumption records for on-site generators to track Scope 1 emissions.';
+        }
+        
+        // Replace meter description for LPG tasks
+        else if (taskText.includes('lpg') && description.includes('Specific Meters to Track')) {
+          description = 'Collect LPG purchase receipts and usage records for cooking or heating equipment to track Scope 1 emissions.';
+        }
+        
+        return (
+          <p className="text-text-muted text-xs mb-3 line-clamp-2">
+            {description}
+          </p>
+        );
+      })()}
 
       <div className="flex items-center justify-between text-xs">
         <div className="flex items-center space-x-2">
@@ -146,7 +171,22 @@ const TaskCard = ({ task, onEdit, onViewDetails, isHighlighted = false }) => {
         <div className="mt-2 flex items-center justify-between text-xs">
           <div className="flex items-center space-x-1 text-brand-orange">
             <i className="fa-solid fa-paperclip"></i>
-            <span>Evidence Required</span>
+            <span>{(() => {
+              const action = task.action_required;
+              // Clean up verbose action_required text for card display
+              if (action.includes('district cooling')) {
+                return 'Monthly district cooling bills';
+              } else if (action.includes('Read meters') && action.includes('utility bills')) {
+                return 'Monthly utility bills';
+              } else if (action.includes('Specific Action:')) {
+                // Extract the main action before the detailed meter info
+                const mainAction = action.split('Specific Action:')[1]?.split(':')[0]?.trim();
+                return mainAction || 'Evidence Required';
+              } else if (action.length > 50) {
+                return action.substring(0, 47) + '...';
+              }
+              return action;
+            })()}</span>
           </div>
           <button
             onClick={(e) => {
@@ -166,13 +206,29 @@ const TaskCard = ({ task, onEdit, onViewDetails, isHighlighted = false }) => {
         const text = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
         const meterTypes = [];
         
+        // Don't show meter tracking for fuel/generator tasks - they need purchase receipts, not meters
+        if (text.includes('fuel') && (text.includes('generator') || text.includes('diesel') || text.includes('petrol'))) {
+          return null; // No meter tracking for these tasks
+        }
+        
+        // Don't show meter tracking for LPG tasks
+        if (text.includes('lpg') && (text.includes('cooking') || text.includes('heating'))) {
+          return null; // No meter tracking for these tasks
+        }
+        
+        // Don't show meter tracking for cooling tasks  
+        if (text.includes('cooling') || text.includes('district cooling')) {
+          return null; // No meter tracking for these tasks
+        }
+        
         if (text.includes('electricity') || text.includes('electric') || text.includes('kwh') || text.includes('power')) {
           meterTypes.push({ type: 'electricity', icon: 'fa-bolt', color: 'text-green-400' });
         }
         if (text.includes('water') || text.includes('m³') || text.includes('cubic') || text.includes('hydro')) {
           meterTypes.push({ type: 'water', icon: 'fa-droplet', color: 'text-blue-400' });
         }
-        if (text.includes('gas') || text.includes('natural gas') || text.includes('lng') || text.includes('fuel')) {
+        // Only show gas meters for actual gas consumption tracking, not fuel purchase tasks
+        if ((text.includes('gas') || text.includes('natural gas') || text.includes('lng')) && !text.includes('fuel')) {
           meterTypes.push({ type: 'gas', icon: 'fa-fire', color: 'text-orange-400' });
         }
         
@@ -532,8 +588,17 @@ const Tasks = () => {
       await esgAPI.updateTask(updatedTask.id, {
         status: updatedTask.status,
         progress_percentage: updatedTask.progress_percentage,
-        completion_notes: updatedTask.completion_notes
+        completion_notes: updatedTask.completion_notes,
+        data_entries: updatedTask.data_entries
       });
+      
+      // Invalidate and refetch tasks to update the UI
+      queryClient.invalidateQueries(['tasks', user?.id, filters]);
+      
+      // Update selected task
+      setSelectedTask(updatedTask);
+      
+      console.log('✅ Task updated successfully, UI refreshed');
     } catch (error) {
       console.warn('API update failed, using localStorage fallback:', error);
     }
@@ -618,6 +683,59 @@ const Tasks = () => {
       }
     }
   }, [searchParams, tasks]);
+
+  // Expose progress log helpers to the console for debugging
+  useEffect(() => {
+    // Attach global references
+    window.progressLogger = progressLogger;
+    window.showProgressLog = () => {
+      const log = progressLogger.exportLog();
+      console.log('🧾 ESG Progress Log:', log);
+      return log;
+    };
+    window.clearProgressLog = () => {
+      progressLogger.clearLog();
+      console.log('🧹 Cleared ESG Progress Log');
+    };
+    window.syncProgressLog = () => {
+      progressLogger.syncWithDatabase(tasks || []);
+      console.log('🔄 Synced ESG Progress Log with DB. Current log:', progressLogger.exportLog());
+    };
+    window.overrideRequiredFiles = () => {
+      if (!tasks || tasks.length === 0) {
+        console.warn('No tasks to process for override');
+        return;
+      }
+      let changed = false;
+      tasks.forEach(task => {
+        // Reuse the same detection as in Tracker
+        const text = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
+        const evidence_keywords = ['photo', 'document', 'bill', 'invoice', 'receipt', 'policy', 'signed', 
+                                   'training', 'contractor', 'specification', 'record', 'material', 'report'];
+        let requiredCount = 0;
+        if (text.includes('local') && text.includes('supplier') && text.includes('policy')) {
+          requiredCount = 2;
+        } else if ((text.includes('bulk') && text.includes('dispenser')) || 
+                   (text.includes('reuse') && text.includes('towel'))) {
+          requiredCount = 0;
+        } else if (task.action_required && task.action_required.trim()) {
+          const action_lower = task.action_required.toLowerCase();
+          if (evidence_keywords.some(keyword => action_lower.includes(keyword))) {
+            requiredCount = 1;
+          }
+        }
+        const before = progressLogger.getLog().tasks?.[task.id]?.files?.required;
+        progressLogger.updateRequiredFiles(task.id, requiredCount);
+        const after = progressLogger.getLog().tasks?.[task.id]?.files?.required;
+        if (before !== after) changed = true;
+      });
+      console.log('🛠️ Override complete. Changed:', changed, 'Current log:', progressLogger.exportLog());
+    };
+
+    // Console hint
+    console.info('Debug helpers available:', 
+      'progressLogger, showProgressLog(), clearProgressLog(), syncProgressLog(), overrideRequiredFiles()');
+  }, [tasks]);
 
   if (isLoading) {
     return <LoadingSpinner />;

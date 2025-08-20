@@ -18,6 +18,13 @@ const Input = forwardRef(({
     className
   );
 
+  // Prevent scroll on number inputs
+  const handleWheel = (e) => {
+    if (props.type === 'number' && e.target === document.activeElement) {
+      e.preventDefault();
+    }
+  };
+
   return (
     <div className="space-y-2">
       {label && (
@@ -29,6 +36,7 @@ const Input = forwardRef(({
       <input
         ref={ref}
         className={inputClasses}
+        onWheel={handleWheel}
         {...props}
       />
       {error && (

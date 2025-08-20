@@ -18,6 +18,7 @@ from .serializers import (
     DemoRequestSerializer, PasswordResetSerializer,
     PasswordResetConfirmSerializer, UserProfileUpdateSerializer
 )
+from .demo_service import DemoUserService
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             email = request.data.get('username') or request.data.get('email')
             try:
                 user = User.objects.get(email=email)
+                
+                # Handle demo user data population
+                if DemoUserService.is_demo_user(user):
+                    DemoUserService.populate_demo_data(user)
+                    logger.info(f"Demo user data populated for: {user.email}")
                 
                 # Track user session
                 self._track_user_session(request, user)
@@ -154,6 +160,41 @@ def demo_request(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@csrf_exempt
+def demo_login(request):
+    """
+    Demo login endpoint - creates and logs in demo user
+    """
+    try:
+        # Get or create demo user
+        demo_user = DemoUserService.get_or_create_demo_user()
+        
+        # Generate tokens for demo user
+        refresh = RefreshToken.for_user(demo_user)
+        
+        # Populate demo data
+        DemoUserService.populate_demo_data(demo_user)
+        
+        logger.info(f"Demo login successful for: {demo_user.email}")
+        
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'token_type': 'bearer',
+            'user': UserSerializer(demo_user).data,
+            'message': 'Demo login successful',
+            'demo_mode': True
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Demo login error: {e}")
+        return Response({
+            'error': 'Demo login failed. Please try again.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_current_user(request):
@@ -238,6 +279,11 @@ def logout(request):
     try:
         # Check if user exists (for demo mode compatibility)
         if hasattr(request, 'user') and request.user:
+            # Handle demo user data cleanup
+            if DemoUserService.is_demo_user(request.user):
+                DemoUserService.clear_demo_data(request.user)
+                logger.info(f"Demo user data cleared for: {request.user.email}")
+            
             logger.info(f"User {getattr(request.user, 'email', 'demo-user')} logged out")
         
         return Response({

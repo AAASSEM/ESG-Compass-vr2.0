@@ -13,6 +13,63 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _format_user_answer(answer):
+    """Format user's onboarding answer for display in task titles"""
+    if isinstance(answer, str):
+        answer = answer.strip().lower()
+        if answer == 'yes':
+            return '✓ Yes'
+        elif answer == 'no':
+            return '✗ No'
+        elif answer == 'partial' or answer == 'partially':
+            return '~ Partially'
+        else:
+            # For text answers, capitalize first letter and limit length
+            formatted = answer.capitalize()
+            if len(formatted) > 50:
+                formatted = formatted[:47] + '...'
+            return formatted
+    return str(answer)
+
+
+def _find_user_answer_for_question(question, answers):
+    """
+    Find user's answer for a question by matching question content.
+    Frontend uses different IDs than backend, so we match by question text.
+    """
+    if not answers:
+        return None
+    
+    question_text = question.wizard_question.lower()
+    
+    # Create mappings based on question content for healthcare sector
+    question_mappings = {
+        # Governance questions (health_gov_1, health_gov_2)
+        'sustainability plan.*reduce energy.*water.*waste': ['health_gov_1'],
+        'reduce paper use.*electronic health records': ['health_gov_2'],
+        
+        # Resource Management questions (health_resource_1, health_resource_2, health_resource_3) 
+        'built.*retrofitted.*green building.*al sa.*estidama.*leed': ['health_resource_1'],
+        'track.*monthly electricity.*water consumption': ['health_resource_2'],
+        'energy-efficient equipment.*led lighting': ['health_resource_3'],
+        
+        # Waste Management questions (health_waste_1, health_waste_2, health_waste_3)
+        'segregate.*medical waste.*point of generation': ['health_waste_1'],
+        'contract.*licensed company.*biomedical waste': ['health_waste_2'], 
+        'reduce.*single-use plastics': ['health_waste_3'],
+    }
+    
+    # Try to match question text to frontend IDs
+    import re
+    for pattern, frontend_ids in question_mappings.items():
+        if re.search(pattern, question_text):
+            for frontend_id in frontend_ids:
+                if frontend_id in answers:
+                    return answers[frontend_id]
+    
+    return None
+
+
 def generate_initial_tasks_for_company(company, created_by=None):
     """
     Generate initial ESG tasks for a company based on their business sector
@@ -90,10 +147,22 @@ def generate_initial_tasks_for_company(company, created_by=None):
                 # Map category to task category choices (analyze both category and question text)
                 task_category = _map_question_category(question.category, question.wizard_question)
                 
+                # Get user's answer for this question from scoping data
+                user_answer = None
+                if hasattr(company, 'scoping_data') and company.scoping_data:
+                    esg_assessment = company.scoping_data.get('esg_assessment', {})
+                    answers = esg_assessment.get('answers', {})
+                    user_answer = _find_user_answer_for_question(question, answers)
+                
                 # Enhance task with specific meter information if relevant
                 enhanced_title, enhanced_description, enhanced_action = _enhance_task_with_meter_info(
                     question, meter_info
                 )
+                
+                # Add user's answer to the title if available
+                if user_answer:
+                    answer_text = _format_user_answer(user_answer)
+                    enhanced_title = f"{enhanced_title} - Your answer: {answer_text}"
                 
                 # Create task
                 task = Task.objects.create(
@@ -178,7 +247,7 @@ def _map_question_category(category, question_text=""):
         'cafeteria', 'food service', 'healthy food', 'locally sourced', 'nutrition',
         'health', 'safety', 'employee', 'staff', 'training', 'community', 'social', 
         'welfare', 'student', 'curriculum', 'education', 'guest', 'customer',
-        'medical waste', 'hazardous', 'single-use plastics', 'paper use', 'digital'
+        'medical waste', 'hazardous', 'single-use plastics'
     ]):
         return 'social'
     
@@ -195,7 +264,8 @@ def _map_question_category(category, question_text=""):
         'policy', 'strategy', 'sustainability plan', 'formal', 'written',
         'governance', 'management', 'compliance', 'documentation', 'audit', 'reporting',
         'designated person', 'team responsible', 'signed by senior', 'certification',
-        'assessment', 'impact assessment', 'contract', 'licensed company'
+        'assessment', 'impact assessment', 'contract', 'licensed company',
+        'paper use', 'digital', 'electronic records', 'paperless', 'digitization'
     ]):
         return 'governance'
     
@@ -344,29 +414,9 @@ def _collect_meter_information(locations):
     """
     meters = []
     
-    # If no locations exist, create default meters for the company
+    # If no locations exist, return empty array - don't generate fake meters
     if not locations.exists():
-        print(f"   📍 No locations found, generating default meters...")
-        default_meters = [
-            {
-                'id': 'ELE001',
-                'number': 'ELE001',
-                'type': 'electricity',
-                'provider': 'DEWA',
-                'location': 'Main Building',
-                'location_id': 'default'
-            },
-            {
-                'id': 'WAT001',
-                'number': 'WAT001',
-                'type': 'water',
-                'provider': 'DEWA',
-                'location': 'Main Building',
-                'location_id': 'default'
-            }
-        ]
-        meters.extend(default_meters)
-        print(f"   🔌 Generated {len(default_meters)} default meters")
+        print(f"   📍 No locations found, no meters available")
         return meters
     
     for location in locations:
@@ -399,29 +449,8 @@ def _collect_meter_information(locations):
                     }
                     meters.append(meter_data)
             else:
-                # Generate default meter IDs based on location for demo purposes
-                location_prefix = location.name.upper().replace(' ', '')[:3]
-                
-                # Standard utility meters for UAE businesses
-                default_meters = [
-                    {
-                        'id': f'ELE{location_prefix}{str(location.id)[-4:]}',
-                        'number': f'ELE{location_prefix}{str(location.id)[-4:]}',
-                        'type': 'electricity',
-                        'provider': 'DEWA',
-                        'location': location.name,
-                        'location_id': str(location.id)
-                    },
-                    {
-                        'id': f'WAT{location_prefix}{str(location.id)[-4:]}',
-                        'number': f'WAT{location_prefix}{str(location.id)[-4:]}',
-                        'type': 'water',
-                        'provider': 'DEWA', 
-                        'location': location.name,
-                        'location_id': str(location.id)
-                    }
-                ]
-                meters.extend(default_meters)
+                # Location exists but has no meters configured
+                print(f"   ⚠️  Location '{location.name}' has no meters configured")
     
     return meters
 

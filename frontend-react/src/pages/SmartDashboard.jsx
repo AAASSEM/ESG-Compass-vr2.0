@@ -97,17 +97,17 @@ const SmartDashboard = () => {
   );
 
   const { data: environmentalFileData } = useQuery(
-    ['environmental-file-data', user?.id], 
+    ['environmental-combined-data', user?.id], 
     () => {
-      console.log('🔍 API CALL: getEnvironmentalFileData for user:', user?.id);
-      return esgAPI.getEnvironmentalFileData();
+      console.log('🔍 API CALL: getCombinedEnvironmentalData for user:', user?.id);
+      return esgAPI.getCombinedEnvironmentalData();
     },
     { 
       enabled: !!user?.id, 
       retry: 1, 
       staleTime: 30000, 
       cacheTime: 300000,
-      onSuccess: (data) => console.log('🔍 API RESPONSE: getEnvironmentalFileData:', data)
+      onSuccess: (data) => console.log('🔍 API RESPONSE: getCombinedEnvironmentalData:', data)
     }
   );
 
@@ -133,7 +133,7 @@ const SmartDashboard = () => {
       esgAPI.getDashboardOverview(),
       esgAPI.getDashboardMetrics(),
       esgAPI.getSocialFileData(),
-      esgAPI.getEnvironmentalFileData(),
+      esgAPI.getCombinedEnvironmentalData(),
       esgAPI.getGovernanceFileData()
     ]),
     {
@@ -265,17 +265,32 @@ const SmartDashboard = () => {
 
     // Process environmental data
     if (environmentalFileData) {
-      // Handle direct object format from the file data API
+      // Handle combined data format from the combined environmental data API
+      const combinedTotals = environmentalFileData.combined_totals;
+      const hasTaskData = environmentalFileData.task_entries?.data_entries_count > 0;
+      const hasFileData = environmentalFileData.file_data?.files_analyzed > 0;
+      
+      console.log('🔍 COMBINED ENV DATA:', {
+        combinedTotals,
+        hasTaskData,
+        hasFileData,
+        taskEntries: environmentalFileData.task_entries,
+        fileData: environmentalFileData.file_data
+      });
+      
       const envData = [
-        { key: 'energy_consumption', value: environmentalFileData.energy_consumption, unit: 'kWh' },
-        { key: 'water_usage', value: environmentalFileData.water_usage, unit: 'L' },
-        { key: 'waste_generated', value: environmentalFileData.waste_generated, unit: 'kg' },
-        { key: 'carbon_emissions', value: environmentalFileData.carbon_emissions, unit: 'tCO2' },
-        { key: 'renewable_energy', value: environmentalFileData.renewable_energy, unit: '%' }
+        { key: 'energy_consumption', value: combinedTotals?.energy_consumption_kwh, unit: 'kWh' },
+        { key: 'water_usage', value: combinedTotals?.water_usage_liters, unit: 'L' },
+        { key: 'waste_generated', value: combinedTotals?.waste_generated, unit: 'kg' },
+        { key: 'carbon_emissions', value: combinedTotals?.carbon_emissions, unit: 'tCO2' },
+        { key: 'renewable_energy', value: combinedTotals?.renewable_energy || environmentalFileData.file_data?.renewable_energy, unit: '%' }
       ];
       
+      console.log('🔍 ENV DATA ITEMS:', envData);
+      
       envData.forEach(item => {
-        if (item.value !== null && item.value !== undefined) {
+        console.log(`🔍 Processing ${item.key}: ${item.value} ${item.unit}`);
+        if (item.value !== null && item.value !== undefined && item.value !== 0) {
           metrics[item.key] = {
             metric: item.key,
             values: [item.value],

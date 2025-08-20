@@ -203,6 +203,27 @@ class ESGPlatformAPI {
     }
   }
 
+  async loginDemo() {
+    try {
+      const response = await api.post('/auth/demo-login/');
+      const { access, refresh, user, demo_mode } = response.data;
+      
+      // Store tokens and user data
+      localStorage.setItem('access_token', access);
+      localStorage.setItem('refresh_token', refresh);
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('demo_mode', 'true');
+
+      return { success: true, user, demo_mode };
+    } catch (error) {
+      console.error('Demo login error:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Demo login failed' 
+      };
+    }
+  }
+
   async logout() {
     try {
       await api.post('/auth/logout/');
@@ -221,6 +242,24 @@ class ESGPlatformAPI {
   }
 
   clearAuth() {
+    // Clear ProgressLogger data before clearing auth
+    try {
+      // Clear all progress logger localStorage keys
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('esg_progress_log')) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+        console.log(`🗑️ Cleared ProgressLogger: ${key}`);
+      });
+    } catch (error) {
+      console.warn('Could not clear ProgressLogger data:', error);
+    }
+    
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
@@ -425,6 +464,11 @@ class ESGPlatformAPI {
 
   async getEnvironmentalFileData() {
     const response = await api.get('/dashboard/environmental/file-data/');
+    return response.data;
+  }
+
+  async getCombinedEnvironmentalData() {
+    const response = await api.get('/dashboard/environmental/combined-data/');
     return response.data;
   }
 

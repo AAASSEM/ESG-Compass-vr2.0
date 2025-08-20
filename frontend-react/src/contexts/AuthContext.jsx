@@ -103,27 +103,29 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Demo mode - skip authentication for dashboard preview
-  const loginDemo = () => {
-    const demoUser = {
-      id: 'demo-user',
-      email: 'demo@example.com',
-      full_name: 'Demo User',
-      first_name: 'Demo',
-      last_name: 'User',
-      company: {
-        id: 'demo-company',
-        name: 'Demo Company',
-        business_sector: 'technology'
+  // Demo mode - login with real demo user from backend
+  const loginDemo = async () => {
+    setLoading(true);
+    try {
+      const result = await esgAPI.loginDemo();
+      if (result.success) {
+        // Clear all cached data before setting new user
+        queryClient.clear();
+        console.log('🧹 Cleared React Query cache on demo login');
+        
+        setUser(result.user);
+        setIsAuthenticated(true);
+        localStorage.setItem('demo_mode', 'true');
+        return { success: true, user: result.user };
+      } else {
+        return { success: false, error: result.error };
       }
-    };
-    
-    setUser(demoUser);
-    setIsAuthenticated(true);
-    localStorage.setItem('user', JSON.stringify(demoUser));
-    localStorage.setItem('demo_mode', 'true');
-    
-    return { success: true, user: demoUser };
+    } catch (error) {
+      console.error('Demo login failed:', error);
+      return { success: false, error: 'Demo login failed' };
+    } finally {
+      setLoading(false);
+    }
   };
 
   const value = {

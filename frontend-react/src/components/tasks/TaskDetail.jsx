@@ -10,6 +10,7 @@ import Modal from '../ui/Modal';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import UserAvatar from '../ui/UserAvatar';
 import { esgAPI } from '../../services/api';
+import { extractRequiredMonths, extractDataFields, extractRequiredDocuments, getMeterInfo, getTaskRequirements } from '../../utils/taskFieldExtraction';
 
 const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
   const queryClient = useQueryClient();
@@ -57,7 +58,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
       initialHistory.push({
         id: 'task_created',
         type: 'task_created',
-        action: 'Task created',
+        action: 'Task created by system',
         details: { title: task.title },
         timestamp: task.created_at || task.updated_at || new Date().toISOString(),
         user: 'System'
@@ -69,7 +70,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
           initialHistory.push({
             id: `evidence_${item.id}`,
             type: 'upload',
-            action: 'File uploaded',
+            action: 'User uploaded file',
             details: { filename: item.title, fileSize: item.file_size },
             timestamp: item.uploaded_at || task.updated_at || new Date().toISOString(),
             user: 'User'
@@ -107,440 +108,10 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
     }
   }, [task]);
 
-  // Extract required months dynamically
-  const extractRequiredMonths = (task) => {
-    const text = `${task?.action_required || ''} ${task?.description || ''}`;
-    const months = [];
-    const currentDate = new Date();
-    
-    // Check for "3 months" pattern
-    if (text.match(/\b(3|three)\s+months?\b/i)) {
-      for (let i = 0; i < 3; i++) {
-        const date = subMonths(currentDate, i);
-        months.push({
-          key: `month_${i}`,
-          name: format(date, 'MMMM yyyy'),
-          startDate: format(date, 'MMM dd'),
-          endDate: format(new Date(date.getFullYear(), date.getMonth() + 1, 0), 'MMM dd')
-        });
-      }
-    } else if (text.match(/\b(6|six)\s+months?\b/i)) {
-      for (let i = 0; i < 6; i++) {
-        const date = subMonths(currentDate, i);
-        months.push({
-          key: `month_${i}`,
-          name: format(date, 'MMMM yyyy'),
-          startDate: format(date, 'MMM dd'),
-          endDate: format(new Date(date.getFullYear(), date.getMonth() + 1, 0), 'MMM dd')
-        });
-      }
-    } else {
-      // Default to current month if not specified
-      months.push({
-        key: 'current',
-        name: format(currentDate, 'MMMM yyyy'),
-        startDate: format(currentDate, 'MMM dd'),
-        endDate: format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'MMM dd')
-      });
-    }
-    
-    return months;
-  };
 
-  // Extract data fields dynamically based on assigned meters
-  const extractDataFields = (task) => {
-    const text = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
-    const fields = [];
-    const assignedMeters = extractMeterInfo(task)?.meters || [];
-    const months = extractRequiredMonths(task);
-    
-    // Create meter-specific data entry fields
-    assignedMeters.forEach((meter) => {
-      if (meter.reading_required) {
-        // Add monthly readings for each meter
-        months.forEach((month) => {
-          fields.push({
-            key: `${meter.meter_id}_${month.key}`,
-            label: `${meter.type.charAt(0).toUpperCase() + meter.type.slice(1)} Reading - ${month.name}`,
-            sublabel: `${meter.meter_id} @ ${meter.location}`,
-            type: 'number',
-            unit: meter.unit || (meter.type === 'electricity' ? 'kWh' : meter.type === 'water' ? 'm³' : meter.type === 'gas' ? 'm³' : 'units'),
-            placeholder: `Enter ${meter.type} reading`,
-            icon: meter.icon || (meter.type === 'electricity' ? 'fa-bolt' : meter.type === 'water' ? 'fa-droplet' : meter.type === 'gas' ? 'fa-fire' : 'fa-gauge'),
-            color: meter.type === 'electricity' ? 'green' : meter.type === 'water' ? 'blue' : meter.type === 'gas' ? 'orange' : 'gray',
-            required: true,
-            period: `${month.startDate} - ${month.endDate}`,
-            meter: meter
-          });
-        });
-        
-        // Add cost field per meter if bills are required
-        if (meter.bills_required) {
-          fields.push({
-            key: `${meter.meter_id}_cost`,
-            label: `${meter.type.charAt(0).toUpperCase() + meter.type.slice(1)} Cost`,
-            sublabel: `Total cost for ${meter.meter_id} @ ${meter.location}`,
-            type: 'number',
-            unit: 'AED',
-            placeholder: `Enter total ${meter.type} cost`,
-            icon: 'fa-coins',
-            color: 'amber',
-            required: false,
-            meter: meter
-          });
-        }
-        
-        // Add peak demand for electricity meters
-        if (meter.type === 'electricity' && (text.includes('peak') || text.includes('demand') || text.includes('maximum'))) {
-          fields.push({
-            key: `${meter.meter_id}_peak_demand`,
-            label: `Peak Demand - ${meter.meter_id}`,
-            sublabel: `Maximum demand for ${meter.location}`,
-            type: 'number',
-            unit: 'kW',
-            placeholder: 'Enter peak demand',
-            icon: 'fa-gauge-high',
-            color: 'red',
-            required: false,
-            meter: meter
-          });
-        }
-      }
-    });
-    
-    // Add percentage field if mentioned (task-level)
-    if (text.includes('percentage') || text.includes('%')) {
-      fields.push({
-        key: 'percentage',
-        label: 'Percentage',
-        type: 'number',
-        unit: '%',
-        placeholder: 'Enter percentage',
-        icon: 'fa-percent',
-        color: 'purple',
-        required: true
-      });
-    }
-    
-    // Always add notes field
-    fields.push({
-      key: 'notes',
-      label: 'Additional Notes',
-      type: 'textarea',
-      placeholder: 'Enter any notes or observations...',
-      icon: 'fa-note-sticky',
-      color: 'gray',
-      required: false
-    });
-    
-    return fields;
-  };
 
-  // Extract meter information dynamically - supports single, dual, or triple meter types
-  const extractMeterInfo = (task) => {
-    const text = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
-    const meterInfo = {
-      meters: []
-    };
-    
-    // Check for meter type requirements based on text content
-    const meterTypes = [];
-    
-    // Electricity detection
-    if (text.includes('electricity') || text.includes('electric') || text.includes('kwh') || text.includes('power')) {
-      meterTypes.push('electricity');
-    }
-    
-    // Water detection
-    if (text.includes('water') || text.includes('m³') || text.includes('cubic') || text.includes('hydro')) {
-      meterTypes.push('water');
-    }
-    
-    // Gas detection
-    if (text.includes('gas') || text.includes('natural gas') || text.includes('lng') || text.includes('fuel')) {
-      meterTypes.push('gas');
-    }
-    
-    // If no specific types detected, check for general consumption/utility mentions
-    if (meterTypes.length === 0 && (text.includes('consumption') || text.includes('utility') || text.includes('meter'))) {
-      // Default to electricity if consumption is mentioned without specifics
-      meterTypes.push('electricity');
-    }
-    
-    // Generate meters based on detected types
-    let meterCounter = 1;
-    meterTypes.forEach(type => {
-      let meterId, provider, unit, icon;
-      
-      switch (type) {
-        case 'electricity':
-          meterId = `ELC${String(meterCounter).padStart(4, '0')}`;
-          provider = text.includes('dewa') ? 'DEWA' : text.includes('addc') ? 'ADDC' : 'DEWA';
-          unit = 'kWh';
-          icon = 'fa-bolt';
-          break;
-        case 'water':
-          meterId = `WAT${String(meterCounter).padStart(4, '0')}`;
-          provider = text.includes('dewa') ? 'DEWA' : text.includes('addc') ? 'ADDC' : 'DEWA';
-          unit = 'm³';
-          icon = 'fa-droplet';
-          break;
-        case 'gas':
-          meterId = `GAS${String(meterCounter).padStart(4, '0')}`;
-          provider = text.includes('adnoc') ? 'ADNOC' : text.includes('enoc') ? 'ENOC' : 'ADNOC';
-          unit = 'm³';
-          icon = 'fa-fire';
-          break;
-      }
-      
-      // Extract location - try multiple patterns
-      let location = 'Main Office';
-      const locationPatterns = [
-        /(?:at|in|from)\s+([^.,\n]+?)(?:\s+and|$|\.)/i,
-        /office|building|facility|floor|basement|rooftop/i
-      ];
-      
-      for (const pattern of locationPatterns) {
-        const locationMatch = text.match(pattern);
-        if (locationMatch && locationMatch[1] && locationMatch[1].trim().length > 3) {
-          location = locationMatch[1].trim();
-          break;
-        } else if (locationMatch && locationMatch[0]) {
-          location = `Main ${locationMatch[0].charAt(0).toUpperCase() + locationMatch[0].slice(1)}`;
-          break;
-        }
-      }
-      
-      meterInfo.meters.push({
-        meter_id: meterId,
-        id: meterId, // Keep both for backward compatibility
-        type: type,
-        icon: icon,
-        provider: provider,
-        location: location,
-        unit: unit,
-        reading_required: true,
-        bills_required: text.includes('bill') || text.includes('invoice') || text.includes('dewa') || text.includes('addc')
-      });
-      
-      meterCounter++;
-    });
-    
-    // Look for existing meter IDs in the text (override generated ones)
-    const existingMeterPatterns = [
-      /meter\s+([A-Z]{3}\d{3,})/gi,
-      /([A-Z]{3}\d{4,})/g,
-      /(?:ELC|WAT|GAS|ELE)\d{3,}/gi
-    ];
-    
-    existingMeterPatterns.forEach(pattern => {
-      const matches = text.matchAll(pattern);
-      for (const match of matches) {
-        const foundMeterId = match[1] || match[0];
-        if (foundMeterId) {
-          // Update existing meter with found ID or add new one
-          const meterType = foundMeterId.toLowerCase().includes('elc') || foundMeterId.toLowerCase().includes('ele') ? 'electricity' :
-                           foundMeterId.toLowerCase().includes('wat') ? 'water' :
-                           foundMeterId.toLowerCase().includes('gas') ? 'gas' : 'electricity';
-          
-          const existingMeter = meterInfo.meters.find(m => m.type === meterType);
-          if (existingMeter) {
-            existingMeter.meter_id = foundMeterId.toUpperCase();
-            existingMeter.id = foundMeterId.toUpperCase();
-          } else {
-            // Add meter type if not already detected
-            const newMeter = {
-              meter_id: foundMeterId.toUpperCase(),
-              id: foundMeterId.toUpperCase(),
-              type: meterType,
-              icon: meterType === 'electricity' ? 'fa-bolt' : meterType === 'water' ? 'fa-droplet' : 'fa-fire',
-              provider: meterType === 'gas' ? 'ADNOC' : 'DEWA',
-              location: 'Main Office',
-              unit: meterType === 'electricity' ? 'kWh' : 'm³',
-              reading_required: true,
-              bills_required: true
-            };
-            meterInfo.meters.push(newMeter);
-          }
-        }
-      }
-    });
-    
-    // Remove duplicates based on meter_id
-    meterInfo.meters = meterInfo.meters.filter((meter, index, self) =>
-      index === self.findIndex((m) => m.meter_id === meter.meter_id)
-    );
-    
-    return meterInfo.meters.length > 0 ? meterInfo : null;
-  };
 
-  // Get meter info - bridge function for database-stored requirements
-  const getMeterInfo = (task) => {
-    // Check if task has database-stored assigned meters
-    if (task?.assigned_meters?.meters) {
-      return task.assigned_meters.meters;
-    }
-    
-    // Try to get real location data from localStorage
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-    const companyId = currentUser.company_id || currentUser.id || 'temp';
-    console.log('🔍 DEBUG: Looking for location data with companyId:', companyId);
-    
-    // Check what localStorage keys exist
-    const allKeys = Object.keys(localStorage).filter(key => key.includes('location'));
-    console.log('🔍 DEBUG: All location-related localStorage keys:', allKeys);
-    
-    const locationData = localStorage.getItem(`onboarding_locations_${companyId}`);
-    console.log('🔍 DEBUG: Location data found:', !!locationData);
-    
-    // Try alternative key patterns
-    if (!locationData) {
-      const alternativeKeys = [
-        `locations_${companyId}`,
-        `onboarding_data_${companyId}`,
-        'onboarding_locations',
-        'locations'
-      ];
-      
-      for (const key of alternativeKeys) {
-        const altData = localStorage.getItem(key);
-        if (altData) {
-          console.log('🔍 DEBUG: Found alternative location data with key:', key);
-          console.log('🔍 DEBUG: Alternative data:', altData);
-          break;
-        }
-      }
-    }
-    
-    if (locationData) {
-      try {
-        const locations = JSON.parse(locationData);
-        console.log('🔍 DEBUG: Parsed locations:', locations);
-        const realMeters = [];
-        
-        locations.forEach(location => {
-          if (location.meters && location.meters.length > 0) {
-            location.meters.forEach(meter => {
-              realMeters.push({
-                meter_id: meter.meterNumber || meter.id,
-                id: meter.meterNumber || meter.id,
-                type: meter.type,
-                icon: meter.type === 'electricity' ? 'fa-bolt' : 
-                      meter.type === 'water' ? 'fa-droplet' : 
-                      meter.type === 'gas' ? 'fa-fire' : 'fa-gauge',
-                provider: meter.provider,
-                location: `${location.name} - ${meter.description} • ${meter.provider}`, // "Location Name - Description • Provider"
-                unit: meter.type === 'electricity' ? 'kWh' : 
-                      meter.type === 'water' ? 'm³' : 
-                      meter.type === 'gas' ? 'm³' : 'units',
-                reading_required: true,
-                bills_required: meter.provider && meter.provider.length > 0
-              });
-            });
-          }
-        });
-        
-        if (realMeters.length > 0) {
-          // Filter meters based on task content
-          const text = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
-          const filteredMeters = realMeters.filter(meter => {
-            if (text.includes('electricity') && meter.type === 'electricity') return true;
-            if (text.includes('water') && meter.type === 'water') return true;
-            if (text.includes('gas') && meter.type === 'gas') return true;
-            return false;
-          });
-          
-          return filteredMeters.length > 0 ? filteredMeters : realMeters;
-        }
-      } catch (error) {
-        console.error('Error parsing location data:', error);
-      }
-    }
-    
-    // Fallback to dynamic extraction for legacy tasks
-    const meterInfo = extractMeterInfo(task);
-    return meterInfo?.meters || [];
-  };
 
-  // Extract required documents dynamically
-  const extractRequiredDocuments = (task) => {
-    const text = `${task?.action_required || ''} ${task?.description || ''}`.toLowerCase();
-    const documents = [];
-    
-    // Bills/Invoices
-    if (text.includes('bill') || text.includes('invoice')) {
-      const months = extractRequiredMonths(task);
-      documents.push({
-        key: 'bills',
-        title: 'Utility Bills',
-        description: `Upload ${months.length} months of utility bills`,
-        fileTypes: '.pdf,.jpg,.jpeg,.png',
-        icon: 'fa-file-invoice',
-        color: 'blue',
-        required: true,
-        months: months
-      });
-    }
-    
-    // Policy documents - only for actual policy-related tasks
-    if (text.includes('policy') || 
-        text.includes('compliance document') || 
-        text.includes('policy document') ||
-        text.includes('written policy') ||
-        text.includes('formal policy') ||
-        text.includes('sustainability policy')) {
-      documents.push({
-        key: 'policy',
-        title: 'Policy Document',
-        description: 'Upload the policy or compliance document',
-        fileTypes: '.pdf,.doc,.docx',
-        icon: 'fa-file-contract',
-        color: 'purple',
-        required: true
-      });
-    }
-    
-    // Photos
-    if (text.includes('photo') || text.includes('picture') || text.includes('image')) {
-      documents.push({
-        key: 'photos',
-        title: 'Photos/Images',
-        description: 'Upload photos as evidence',
-        fileTypes: '.jpg,.jpeg,.png',
-        icon: 'fa-camera',
-        color: 'green',
-        required: false
-      });
-    }
-    
-    // Excel/CSV
-    if (text.includes('excel') || text.includes('csv') || text.includes('spreadsheet')) {
-      documents.push({
-        key: 'spreadsheet',
-        title: 'Data Spreadsheet',
-        description: 'Upload completed data template',
-        fileTypes: '.xlsx,.xls,.csv',
-        icon: 'fa-file-excel',
-        color: 'green',
-        required: false
-      });
-    }
-    
-    // Default if no specific type found
-    if (documents.length === 0) {
-      documents.push({
-        key: 'general',
-        title: 'Supporting Documents',
-        description: 'Upload relevant evidence',
-        fileTypes: '.pdf,.doc,.docx,.jpg,.jpeg,.png',
-        icon: 'fa-paperclip',
-        color: 'gray',
-        required: true
-      });
-    }
-    
-    return documents;
-  };
 
   // Helper function to match evidence to document requirements
   const getDocumentEvidence = (evidence, doc) => {
@@ -585,9 +156,32 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
       }
       
       // For general documents, use flexible matching
-      return evidenceTitle.includes(docKey) || 
-             evidenceTitle.includes(baseKey) ||
-             evidenceDescription.includes(baseKey);
+      // Since all documents are now "Supporting Documents", be more inclusive
+      if (evidenceTitle.includes(docKey) || 
+          evidenceTitle.includes(baseKey) ||
+          evidenceDescription.includes(baseKey)) {
+        return true;
+      }
+      
+      // If no specific matching and this is the first/main document category, include all unmatched files
+      const isFirstCategory = requiredDocuments.indexOf(doc) === 0;
+      const isGeneralCategory = doc.key === 'general';
+      
+      if (isFirstCategory || isGeneralCategory) {
+        // Check if this file is already matched to another document category
+        const isMatchedElsewhere = requiredDocuments.some(otherDoc => {
+          if (otherDoc.key === doc.key) return false; // Skip current doc
+          const otherDocKey = otherDoc.key.toLowerCase();
+          const otherBaseKey = otherDocKey.split('_')[0];
+          return evidenceTitle.includes(otherDocKey) || 
+                 evidenceTitle.includes(otherBaseKey) ||
+                 evidenceDescription.includes(otherBaseKey);
+        });
+        
+        return !isMatchedElsewhere;
+      }
+      
+      return false;
     });
   };
 
@@ -626,8 +220,29 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
       const taskAttachments = task.attachments || [];
       setEvidence(taskAttachments);
       setTaskProgress(task.progress_percentage || 0);
+      
+      // Load saved data entries from database
+      if (task.data_entries) {
+        console.log('📥 Loading saved data entries:', task.data_entries);
+        setDataEntries(task.data_entries);
+      } else {
+        // Initialize empty data entries for the required fields
+        const fields = extractDataFields(task);
+        const entries = {};
+        fields.forEach(field => {
+          entries[field.key] = '';
+        });
+        setDataEntries(entries);
+      }
     }
   }, [task]);
+
+  // Reset to Overview tab when task changes or modal opens
+  useEffect(() => {
+    if (task && isOpen) {
+      setActiveTab('overview');
+    }
+  }, [task?.id, isOpen]);
 
   const handleAssignUser = async (userId) => {
     const user = availableUsers.find(u => u.id === userId);
@@ -648,6 +263,13 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
 
       setShowAssignModal(false);
       toast.success(`Task assigned to ${user.full_name}`);
+      
+      // Add to history
+      addHistoryEntry('assignment', 'Task assigned to user', {
+        assignedTo: user.full_name,
+        assignedEmail: user.email,
+        previousAssignee: task.assigned_user?.full_name || 'Unassigned'
+      });
     } catch (error) {
       console.error('Error assigning task:', error);
       toast.error('Failed to assign task');
@@ -655,41 +277,161 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
   };
 
   const handleDataEntry = (field, value) => {
+    console.log(`🔍 handleDataEntry called: field="${field}", value="${value}", type=${typeof value}`);
     const previousValue = dataEntries[field];
     
-    setDataEntries(prev => ({
-      ...prev,
+    const newDataEntries = {
+      ...dataEntries,
       [field]: value
-    }));
+    };
+    
+    console.log('🔍 New data entries object:', newDataEntries);
+    setDataEntries(newDataEntries);
 
     // Add to history if value changed
     if (value && value !== previousValue) {
       const fieldConfig = dataFields.find(f => f.key === field);
-      addHistoryEntry('data_entry', 'Data entered', {
+      // Create more specific action based on field type
+      let actionMessage = 'User entered data';
+      if (fieldConfig?.label?.toLowerCase().includes('reading')) {
+        actionMessage = 'User entered meter reading';
+      } else if (fieldConfig?.label?.toLowerCase().includes('cost')) {
+        actionMessage = 'User entered cost data';
+      } else if (fieldConfig?.label?.toLowerCase().includes('percentage')) {
+        actionMessage = 'User entered percentage';
+      } else if (fieldConfig?.label?.toLowerCase().includes('notes')) {
+        actionMessage = 'User added notes';
+      } else if (fieldConfig?.meter) {
+        actionMessage = `User entered ${fieldConfig.meter.type} meter data`;
+      }
+      
+      addHistoryEntry('data_entry', actionMessage, {
         field: fieldConfig?.label || field,
         value: fieldConfig?.unit ? `${value} ${fieldConfig.unit}` : value,
         previousValue: previousValue || 'Empty'
       });
     }
+  };
 
-    // Auto-save after typing stops
-    clearTimeout(window.dataEntrySaveTimeout);
-    window.dataEntrySaveTimeout = setTimeout(() => {
-      toast.success('Data saved automatically', {
+  const saveDataEntry = async (field, value) => {
+    try {
+      const newDataEntries = {
+        ...dataEntries,
+        [field]: value
+      };
+      
+      console.log('💾 Saving data entry on blur:', newDataEntries);
+      await esgAPI.updateTask(task.id, {
+        data_entries: newDataEntries
+      });
+      
+      toast.success('Data saved', {
         position: 'bottom-right',
         autoClose: 2000
       });
+      
+      // Update progress after saving
       updateDataEntryProgress();
-    }, 1000);
+      
+    } catch (error) {
+      console.error('Error saving data entry:', error);
+      toast.error('Failed to save data', {
+        position: 'bottom-right',
+        autoClose: 3000
+      });
+    }
   };
 
-  const updateDataEntryProgress = () => {
+  const calculateOverallProgress = (currentEvidence = evidence) => {
+    // Calculate data entry progress
     const requiredFields = dataFields.filter(f => f.required);
     const filledRequired = requiredFields.filter(f => dataEntries[f.key]).length;
-    const percentage = requiredFields.length > 0 
+    const dataProgress = requiredFields.length > 0 
       ? Math.round((filledRequired / requiredFields.length) * 100)
-      : 0;
-    setTaskProgress(percentage);
+      : 100; // If no data required, consider it 100%
+    
+    // Calculate file upload progress - use extractRequiredDocuments directly to avoid scope issues
+    const currentRequiredDocs = extractRequiredDocuments(task).filter(d => d.required);
+    const uploadedDocs = currentEvidence.length;
+    const fileProgress = currentRequiredDocs.length > 0 
+      ? Math.round((uploadedDocs / currentRequiredDocs.length) * 100)
+      : 100; // If no files required, consider it 100%
+    
+    // Overall progress calculation:
+    // - If no data entry required: use file progress only
+    // - If data entry required: average of both data and file progress
+    const overallProgress = requiredFields.length === 0 
+      ? fileProgress  // No data entry required, use file progress only
+      : Math.round((dataProgress + fileProgress) / 2);  // Average both
+    
+    console.log('📊 Progress Calculation Debug:', {
+      taskTitle: task?.title?.substring(0, 50) + '...',
+      requiredFieldsCount: requiredFields.length,
+      filledRequiredCount: filledRequired,
+      requiredDocsCount: currentRequiredDocs.length,
+      uploadedDocsCount: uploadedDocs,
+      requiredDocTypes: currentRequiredDocs.map(d => d.key),
+      dataProgress,
+      fileProgress,
+      overallProgress,
+      calculationUsed: requiredFields.length === 0 ? 'fileProgress only' : 'average of both'
+    });
+    
+    return { dataProgress, fileProgress, overallProgress };
+  };
+
+  const updateDataEntryProgress = async () => {
+    const { overallProgress } = calculateOverallProgress();
+    
+    setTaskProgress(overallProgress);
+    
+    // Track status changes
+    const oldStatus = task.status;
+    const newStatus = overallProgress >= 100 ? 'completed' : (overallProgress > 0 ? 'in_progress' : task.status);
+    
+    // Save progress and data entries to database
+    try {
+      await esgAPI.updateTask(task.id, {
+        progress_percentage: overallProgress,
+        status: newStatus,
+        data_entries: dataEntries // Save the actual data entries
+      });
+      
+      // Add status change to history if status changed
+      if (oldStatus !== newStatus) {
+        if (newStatus === 'completed') {
+          addHistoryEntry('status_change', 'Task completed automatically', {
+            fromStatus: oldStatus,
+            toStatus: newStatus,
+            progress: overallProgress
+          });
+        } else if (newStatus === 'in_progress' && oldStatus === 'todo') {
+          addHistoryEntry('status_change', 'Task started by user', {
+            fromStatus: oldStatus,
+            toStatus: newStatus,
+            progress: overallProgress
+          });
+        }
+      }
+      
+      // Update the task in parent component
+      if (onUpdate) {
+        onUpdate({
+          ...task,
+          progress_percentage: overallProgress,
+          status: overallProgress >= 100 ? 'completed' : (overallProgress > 0 ? 'in_progress' : task.status),
+          data_entries: dataEntries
+        });
+      }
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries('tasks');
+      queryClient.invalidateQueries('progress-tracker');
+      
+    } catch (error) {
+      console.error('Error saving data entries:', error);
+      toast.error('Failed to save data entries');
+    }
   };
 
   const handleFileSelect = (event, documentKey = null, monthKey = null) => {
@@ -719,6 +461,10 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
     setIsSubmitting(true);
     
     try {
+      console.log('🔄 Starting file upload:', file.name, 'Size:', file.size, 'Type:', file.type);
+      console.log('📋 Task ID:', task.id);
+      console.log('🔐 Auth token exists:', !!localStorage.getItem('access_token'));
+      
       const fileTitle = file.name.replace(/\.[^/.]+$/, "");
       const uploadedAttachment = await esgAPI.uploadTaskAttachment(task.id, {
         file: file,
@@ -726,28 +472,30 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
         description: `Uploaded file: ${file.name}`,
         attachment_type: 'evidence'
       });
+      
+      console.log('✅ Upload successful:', uploadedAttachment);
 
       const updatedEvidence = [...evidence, uploadedAttachment];
       setEvidence(updatedEvidence);
 
-      const documents = extractRequiredDocuments(task);
-      const progressPercentage = Math.min((updatedEvidence.length / documents.length) * 100, 100);
-      setTaskProgress(progressPercentage);
+      // Update overall progress after file upload
+      const { overallProgress } = calculateOverallProgress(updatedEvidence);
+      setTaskProgress(overallProgress);
 
       await esgAPI.updateTask(task.id, {
-        progress_percentage: progressPercentage,
-        status: progressPercentage >= 100 ? 'completed' : (progressPercentage > 0 ? 'in_progress' : task.status)
+        progress_percentage: overallProgress,
+        status: overallProgress >= 100 ? 'completed' : (overallProgress > 0 ? 'in_progress' : task.status)
       });
 
       setIsSubmitting(false);
       toast.success(`File "${file.name}" uploaded successfully!`);
       
       // Add to history
-      addHistoryEntry('upload', 'File uploaded', { 
+      addHistoryEntry('upload', 'User uploaded file', { 
         filename: file.name, 
         fileSize: file.size,
         progressBefore: taskProgress,
-        progressAfter: progressPercentage
+        progressAfter: overallProgress
       });
 
       queryClient.invalidateQueries('progress-tracker');
@@ -757,15 +505,38 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
         onUpdate({
           ...task,
           attachments: updatedEvidence,
-          progress_percentage: progressPercentage,
-          status: progressPercentage >= 100 ? 'completed' : (progressPercentage > 0 ? 'in_progress' : task.status)
+          progress_percentage: overallProgress,
+          status: overallProgress >= 100 ? 'completed' : (overallProgress > 0 ? 'in_progress' : task.status)
         });
       }
 
     } catch (error) {
       console.error('Error uploading file:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      console.error('Error message:', error.message);
+      
       setIsSubmitting(false);
-      toast.error(`Failed to upload "${file.name}"`);
+      
+      // Show detailed error message
+      let errorMessage = `Failed to upload "${file.name}"`;
+      if (error.response?.data?.error) {
+        errorMessage += `: ${error.response.data.error}`;
+      } else if (error.response?.status === 413) {
+        errorMessage += ': File too large (max 10MB)';
+      } else if (error.response?.status === 401) {
+        errorMessage += ': Authentication required';
+      } else if (error.response?.status === 403) {
+        errorMessage += ': Permission denied';
+      } else if (error.response?.status >= 500) {
+        errorMessage += ': Server error - please try again';
+      } else if (error.message?.includes('Network Error')) {
+        errorMessage += ': Network connection error';
+      } else if (error.response?.status) {
+        errorMessage += `: Server error (${error.response.status})`;
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -831,13 +602,13 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
       const updatedEvidence = [...evidence, uploadedAttachment];
       setEvidence(updatedEvidence);
 
-      const documents = extractRequiredDocuments(task);
-      const progressPercentage = Math.min((updatedEvidence.length / documents.length) * 100, 100);
-      setTaskProgress(progressPercentage);
+      // Update overall progress after file upload
+      const { overallProgress } = calculateOverallProgress(updatedEvidence);
+      setTaskProgress(overallProgress);
 
       await esgAPI.updateTask(task.id, {
-        progress_percentage: progressPercentage,
-        status: progressPercentage >= 100 ? 'completed' : (progressPercentage > 0 ? 'in_progress' : task.status)
+        progress_percentage: overallProgress,
+        status: overallProgress >= 100 ? 'completed' : (overallProgress > 0 ? 'in_progress' : task.status)
       });
 
       setNewEvidence({
@@ -859,8 +630,8 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
         onUpdate({
           ...task,
           attachments: updatedEvidence,
-          progress_percentage: progressPercentage,
-          status: progressPercentage >= 100 ? 'completed' : (progressPercentage > 0 ? 'in_progress' : task.status)
+          progress_percentage: overallProgress,
+          status: overallProgress >= 100 ? 'completed' : (overallProgress > 0 ? 'in_progress' : task.status)
         });
       }
 
@@ -878,21 +649,39 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
       const updatedEvidence = evidence.filter(e => e.id !== evidenceId);
       setEvidence(updatedEvidence);
       
-      const documents = extractRequiredDocuments(task);
-      const progressPercentage = Math.min((updatedEvidence.length / documents.length) * 100, 100);
-      setTaskProgress(progressPercentage);
+      // Update overall progress after file upload
+      const { overallProgress } = calculateOverallProgress(updatedEvidence);
+      setTaskProgress(overallProgress);
       
       // Add to history
-      addHistoryEntry('upload', 'File removed', {
+      addHistoryEntry('upload', 'User removed file', {
         filename: removedEvidence?.title || 'Unknown file',
         progressBefore: taskProgress,
-        progressAfter: progressPercentage
+        progressAfter: overallProgress
       });
       
       toast.success('Evidence removed');
     } catch (error) {
       console.error('Error removing evidence:', error);
-      toast.error('Failed to remove evidence');
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      console.error('Error message:', error.message);
+      
+      // Show detailed error message
+      let errorMessage = 'Failed to remove evidence';
+      if (error.response?.data?.error) {
+        errorMessage += `: ${error.response.data.error}`;
+      } else if (error.response?.status === 404) {
+        errorMessage += ': File not found';
+      } else if (error.response?.status === 403) {
+        errorMessage += ': Permission denied';
+      } else if (error.response?.status >= 500) {
+        errorMessage += ': Server error';
+      } else if (error.message?.includes('Network Error')) {
+        errorMessage += ': Network connection error';
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -938,14 +727,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
       } else if (typeof task.user_answer === 'string') {
         // Capitalize first letter and limit length
         answerText = task.user_answer.charAt(0).toUpperCase() + task.user_answer.slice(1);
-        if (answerText.length > 50) {
-          answerText = answerText.substring(0, 50) + '...';
+        if (answerText.length > 20) {
+          answerText = answerText.substring(0, 20) + '...';
         }
       } else {
         answerText = String(task.user_answer);
       }
       
-      return `${cleanTitle} (Answer: ${answerText})`;
+      return `${cleanTitle} - Your answer: ✓ ${answerText}`;
     }
     
     return cleanTitle;
@@ -958,6 +747,22 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
   // Check if this task has meter-related content and should use our clean dynamic instructions
   const needsDynamicMeterInstructions = (() => {
     const text = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
+    
+    // Exclude fuel/generator tasks - they need purchase receipts, not meter readings
+    if (text.includes('fuel') && (text.includes('generator') || text.includes('diesel') || text.includes('petrol'))) {
+      return false;
+    }
+    
+    // Exclude LPG tasks - they need purchase invoices, not meter readings
+    if (text.includes('lpg') && (text.includes('cooking') || text.includes('heating'))) {
+      return false;
+    }
+    
+    // Exclude cooling tasks - they need service bills, not meter readings
+    if (text.includes('cooling') || text.includes('district cooling')) {
+      return false;
+    }
+    
     return (text.includes('meter') || 
             text.includes('consumption') || 
             text.includes('electricity') || 
@@ -969,16 +774,71 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
   // Extract clean action required text (remove the verbose meter instructions if present)
   const getCleanActionRequired = () => {
     const actionRequired = task?.action_required || '';
+    const taskText = `${task?.title || ''} ${task?.description || ''}`.toLowerCase();
     
-    // If it's a meter task, extract just the main question/task before the detailed instructions
-    if (needsDynamicMeterInstructions && actionRequired.includes('Specific Action:')) {
-      // Extract just the main part before "Specific Action:"
+    console.log('🔍 DEBUG getCleanActionRequired:', {
+      taskTitle: task?.title,
+      taskText: taskText,
+      actionRequired: actionRequired.substring(0, 100) + '...',
+      hasDistrictCooling: taskText.includes('district cooling'),
+      actionHasDistrictCooling: actionRequired.toLowerCase().includes('district cooling')
+    });
+    
+    // Handle district cooling tasks - they don't need meter details
+    if (taskText.includes('district cooling') || actionRequired.toLowerCase().includes('district cooling')) {
+      console.log('🔍 DEBUG: Returning district cooling bills');
+      return 'Monthly district cooling bills';
+    }
+    
+    // Handle fuel/generator tasks - they don't need meter details
+    if (taskText.includes('fuel') || taskText.includes('generator') || taskText.includes('diesel') || taskText.includes('petrol')) {
+      if (actionRequired.includes('fuel') && actionRequired.includes('receipt')) {
+        return 'Fuel purchase receipts and consumption records';
+      }
+      return 'Purchase receipts and consumption records';
+    }
+    
+    // For tasks that incorrectly have meter details but shouldn't (cooling tasks)
+    if ((taskText.includes('cooling') || taskText.includes('lpg')) && actionRequired.includes('Read meters')) {
+      // Override incorrect meter instructions for cooling/LPG tasks
+      if (taskText.includes('cooling')) {
+        return 'Monthly cooling service bills';
+      } else if (taskText.includes('lpg')) {
+        return 'LPG purchase receipts and usage records';
+      }
+    }
+    
+    // If it contains "Specific Action:" - extract and clean the main action
+    if (actionRequired.includes('Specific Action:')) {
+      const specificActionPart = actionRequired.split('Specific Action:')[1];
+      if (specificActionPart) {
+        // Extract the main action before the detailed meter list
+        const lines = specificActionPart.split('\n');
+        const mainAction = lines[0]?.replace(':', '').trim();
+        
+        if (mainAction && mainAction.length > 0) {
+          // Clean up common patterns
+          if (mainAction.includes('Read meters') && mainAction.includes('utility bills')) {
+            return 'Read meters and record monthly consumption from utility bills';
+          }
+          return mainAction;
+        }
+      }
+      
+      // Fallback: extract main part before "Specific Action:"
       const mainPart = actionRequired.split('Specific Action:')[0].trim();
-      // Remove "Action Required:" prefix if it exists, since we add our own
       return mainPart.replace(/^Action Required:\s*/i, '').trim();
     }
     
-    return actionRequired;
+    // For very long action texts, provide a summary
+    if (actionRequired.length > 200) {
+      const firstSentence = actionRequired.split('.')[0];
+      if (firstSentence.length < 100) {
+        return firstSentence.replace(/^Action Required:\s*/i, '').trim();
+      }
+    }
+    
+    return actionRequired.replace(/^Action Required:\s*/i, '').trim();
   };
   
   const requiredDocuments = extractRequiredDocuments(task);
@@ -1171,8 +1031,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                 </Card>
               )}
 
-              {/* Meter Information - Only show for meter-related tasks */}
-              {meterInfo && meterInfo.length > 0 && (task?.title?.toLowerCase().includes('meter') || 
+              {/* Meter Information - Only show for meter-related tasks, exclude fuel/generator tasks */}
+              {meterInfo && meterInfo.length > 0 && 
+               !task?.title?.toLowerCase().includes('fuel') && 
+               !task?.title?.toLowerCase().includes('generator') && 
+               !task?.title?.toLowerCase().includes('lpg') &&
+               !task?.title?.toLowerCase().includes('cooling') &&
+               !task?.title?.toLowerCase().includes('district cooling') &&
+               (task?.title?.toLowerCase().includes('meter') || 
                task?.title?.toLowerCase().includes('electricity') || 
                task?.title?.toLowerCase().includes('water') || 
                task?.title?.toLowerCase().includes('gas') ||
@@ -1199,6 +1065,83 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                 </Card>
               )}
 
+              {/* Meter Warning - Show when task needs meters but none are found OR some are missing */}
+              {(() => {
+                const text = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
+                const taskNeedsMeters = text.includes('meter') || text.includes('electricity') || text.includes('water') || text.includes('gas') || 
+                                       text.includes('consumption') || text.includes('read meters') || text.includes('utility bills');
+                const hasMeters = meterInfo && meterInfo.length > 0;
+                const hasMissingMeters = hasMeters && meterInfo[0]?.missingMeterTypes?.length > 0;
+                const isExcludedTask = task?.title?.toLowerCase().includes('fuel') || 
+                                      task?.title?.toLowerCase().includes('generator') || 
+                                      task?.title?.toLowerCase().includes('lpg') || 
+                                      task?.title?.toLowerCase().includes('cooling');
+                
+                return taskNeedsMeters && (!hasMeters || hasMissingMeters) && !isExcludedTask;
+              })() && (
+                <Card className="bg-amber-500/10 border-amber-500/20">
+                  <h4 className="text-sm font-medium text-amber-500 mb-3 flex items-center">
+                    <i className="fa-solid fa-triangle-exclamation mr-2"></i>
+                    {meterInfo && meterInfo.length > 0 ? 'Missing Meter Types' : 'Meter Setup Required'}
+                  </h4>
+                  <div className="space-y-3">
+                    {meterInfo && meterInfo.length > 0 && meterInfo[0]?.missingMeterTypes ? (
+                      <>
+                        <p className="text-sm text-text-high">
+                          This task requires multiple meter types, but some are missing from your location settings.
+                        </p>
+                        <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/10">
+                          <div className="text-sm text-text-high mb-2">
+                            <strong>Available meters:</strong> You can enter data for {meterInfo.map(m => m.type).join(', ')} meters.
+                          </div>
+                          <div className="text-sm text-amber-600">
+                            <strong>Missing meters:</strong> Please add {meterInfo[0].missingMeterTypes.join(', ')} meter{meterInfo[0].missingMeterTypes.length > 1 ? 's' : ''} to your location settings.
+                          </div>
+                        </div>
+                        <div className="text-xs text-text-muted">
+                          <strong>Note:</strong> You can still complete this task with the available meter data. Add the missing meters in your location settings for complete data tracking.
+                        </div>
+                      </>
+                    ) : (
+                      (() => {
+                        // Determine what meter types are required for this task
+                        const text = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
+                        const requiredMeterTypes = [];
+                        if (text.includes('electricity') || text.includes('electric') || text.includes('kwh') || text.includes('power')) {
+                          requiredMeterTypes.push('electricity');
+                        }
+                        if (text.includes('water') || text.includes('m³') || text.includes('cubic meter')) {
+                          requiredMeterTypes.push('water');
+                        }
+                        if (text.includes('gas') || text.includes('natural gas') || text.includes('lpg') || text.includes('cooking gas') || text.includes('heating gas')) {
+                          requiredMeterTypes.push('gas');
+                        }
+                        
+                        return (
+                          <>
+                            <p className="text-sm text-text-high">
+                              This task requires {requiredMeterTypes.length > 0 ? requiredMeterTypes.join(', ') + ' meter' + (requiredMeterTypes.length > 1 ? 's' : '') : 'meter readings'}, but no meters have been found in your location settings.
+                            </p>
+                            <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/10">
+                              <div className="flex items-start space-x-2">
+                                <i className="fa-solid fa-info-circle text-amber-500 text-sm mt-0.5"></i>
+                                <div className="text-sm text-text-high">
+                                  <strong>Next Steps:</strong> Please add {requiredMeterTypes.length > 0 ? requiredMeterTypes.join(', ') + ' meter' + (requiredMeterTypes.length > 1 ? 's' : '') : 'the required meters'} in your location settings first. 
+                                  You can find this in the onboarding section under "Location & Meter Setup".
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-xs text-text-muted">
+                              <strong>Note:</strong> Data entry fields will appear automatically once you add the required meters to your location.
+                            </div>
+                          </>
+                        );
+                      })()
+                    )}
+                  </div>
+                </Card>
+              )}
+
               {/* Action Required */}
               {task.action_required && (
                 <Card className="bg-amber-500/10 border-amber-500/20">
@@ -1211,7 +1154,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                   {!needsDynamicMeterInstructions && task.action_required && (
                     <div className="mb-4">
                       <div className="text-sm text-text-high">
-                        <strong>Action Required:</strong> {getCleanActionRequired()}
+                        <strong>Evidence Required:</strong> {getCleanActionRequired()}
                       </div>
                     </div>
                   )}
@@ -1241,7 +1184,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                         </div>
                         
                         <div className="mt-3 text-xs text-amber-300">
-                          <strong>Total:</strong> {meterInfo.filter(m => m.bills_required).length * 3} monthly bills showing consumption data
+                          <strong>Total:</strong> {meterInfo.filter(m => m.bills_required).length} monthly bills showing consumption data
                         </div>
                       </div>
                     </div>
@@ -1280,12 +1223,52 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                 Data Entry
               </div>
 
+              {/* No Data Entry Fields Warning */}
+              {(() => {
+                const text = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
+                const taskNeedsMeters = text.includes('meter') || text.includes('electricity') || text.includes('water') || text.includes('gas') || 
+                                       text.includes('consumption') || text.includes('read meters') || text.includes('utility bills');
+                const hasDataFields = dataFields.filter(f => f.key !== 'notes').length > 0;
+                const isExcludedTask = task?.title?.toLowerCase().includes('fuel') || 
+                                      task?.title?.toLowerCase().includes('generator') || 
+                                      task?.title?.toLowerCase().includes('lpg') || 
+                                      task?.title?.toLowerCase().includes('cooling');
+                
+                return taskNeedsMeters && !hasDataFields && !isExcludedTask;
+              })() && (
+                <Card className="bg-amber-500/10 border-amber-500/20">
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <i className="fa-solid fa-triangle-exclamation text-2xl text-amber-500"></i>
+                    </div>
+                    <h3 className="text-lg font-medium text-text-high mb-2">No Data Entry Fields Available</h3>
+                    <p className="text-sm text-text-muted mb-4">
+                      This task requires meter readings, but no meters have been set up in your location settings.
+                    </p>
+                    <div className="p-4 bg-amber-500/5 rounded-lg border border-amber-500/10 text-left">
+                      <div className="flex items-start space-x-2">
+                        <i className="fa-solid fa-lightbulb text-amber-500 text-sm mt-0.5"></i>
+                        <div className="text-sm text-text-high">
+                          <strong>How to fix this:</strong>
+                          <ol className="mt-2 space-y-1 ml-4 list-decimal">
+                            <li>Go to the onboarding section</li>
+                            <li>Navigate to "Location & Meter Setup"</li>
+                            <li>Add the required meters for this task</li>
+                            <li>Return here - data entry fields will appear automatically</li>
+                          </ol>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {dataFields.map((field) => (
                   <Card 
                     key={field.key}
                     className={`bg-white/5 border-white/10 hover:border-brand-green/30 transition-colors ${
-                      field.type === 'textarea' ? 'md:col-span-2' : ''
+                      field.type === 'textarea' || field.type === 'warning' ? 'md:col-span-2' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between mb-3">
@@ -1298,6 +1281,9 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                             {field.label}
                             {field.required && <span className="text-red-400 ml-1">*</span>}
                           </div>
+                          {field.sublabel && (
+                            <div className="text-xs text-text-muted font-medium">{field.sublabel}</div>
+                          )}
                           {field.period && (
                             <div className="text-xs text-text-muted">{field.period}</div>
                           )}
@@ -1305,7 +1291,16 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                       </div>
                     </div>
                     
-                    {field.type === 'textarea' ? (
+                    {field.type === 'warning' ? (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                        <div className="text-amber-300 text-sm">
+                          {field.warningMessage}
+                        </div>
+                        <div className="text-xs text-amber-400 mt-2">
+                          💡 Add the required meters in your <span className="font-medium">Location Settings</span> to track this data.
+                        </div>
+                      </div>
+                    ) : field.type === 'textarea' ? (
                       <textarea
                         placeholder={field.placeholder}
                         value={dataEntries[field.key] || ''}
@@ -1320,6 +1315,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                           placeholder={field.placeholder}
                           value={dataEntries[field.key] || ''}
                           onChange={(e) => handleDataEntry(field.key, e.target.value)}
+                          onBlur={(e) => saveDataEntry(field.key, e.target.value)}
                           className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-text-high placeholder-text-muted focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green transition-colors pr-12"
                         />
                         {field.unit && (
@@ -1343,20 +1339,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-medium text-text-high">Data Entry Progress</span>
                   <span className="text-sm text-brand-green font-medium">
-                    {Math.round(
-                      (dataFields.filter(f => f.required && dataEntries[f.key]).length / 
-                       dataFields.filter(f => f.required).length) * 100
-                    ) || 0}%
+                    {calculateOverallProgress().dataProgress}%
                   </span>
                 </div>
                 <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
                   <div 
                     className="h-2 rounded-full bg-gradient-to-r from-brand-green to-green-400 transition-all duration-500"
                     style={{ 
-                      width: `${Math.round(
-                        (dataFields.filter(f => f.required && dataEntries[f.key]).length / 
-                         dataFields.filter(f => f.required).length) * 100
-                      ) || 0}%` 
+                      width: `${calculateOverallProgress().dataProgress}%` 
                     }}
                   />
                 </div>
@@ -1375,131 +1365,87 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                 </span>
               </div>
 
-              {requiredDocuments.map((doc) => (
-                <Card key={doc.key} className="bg-white/5 border-white/10">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <i className={`fa-solid ${doc.icon} text-${doc.color}-400`}></i>
-                      <h4 className="text-sm font-medium text-text-high">
-                        {doc.title}
-                        {!doc.required && <span className="text-text-muted ml-2">(Optional)</span>}
-                      </h4>
-                    </div>
-                    <span className={`bg-${doc.color}-500/20 text-${doc.color}-300 px-2 py-1 rounded text-xs`}>
-                      {doc.fileTypes.replace(/\./g, '').toUpperCase()}
-                    </span>
+              {/* Single Unified Upload Section - No Document Classification */}
+              <Card className="bg-white/5 border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <i className="fa-solid fa-file text-brand-blue"></i>
+                    <h4 className="text-sm font-medium text-text-high">
+                      Supporting Documents
+                      {requiredDocuments.filter(d => d.required).length > 0 && (
+                        <span className="text-brand-blue ml-2">
+                          ({requiredDocuments.filter(d => d.required).length} required)
+                        </span>
+                      )}
+                    </h4>
                   </div>
-                  
-                  <p className="text-sm text-text-muted mb-4">{doc.description}</p>
-
-                  {/* Month Pills for bills */}
-                  {doc.months && doc.months.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {doc.months.map((month) => (
-                        <div 
-                          key={month.key}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-                            monthlyUploads[month.key] 
-                              ? 'bg-brand-green/20 border-brand-green/30 text-brand-green' 
-                              : 'bg-white/5 border-white/10 text-text-muted hover:bg-white/10'
-                          }`}
-                        >
-                          {monthlyUploads[month.key] ? '✓' : '○'} {month.name}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Drag and Drop Zone */}
-                  <div
-                    className={`relative border-2 border-dashed rounded-lg p-8 transition-all duration-200 text-center ${
-                      dragActive
-                        ? 'border-brand-green bg-brand-green/10'
-                        : 'border-white/20 hover:border-brand-green/50 bg-white/5'
-                    }`}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                  >
-                    <input
-                      type="file"
-                      accept={doc.fileTypes}
-                      multiple={doc.months && doc.months.length > 1}
-                      onChange={(e) => handleFileSelect(e, doc.key)}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                    <div className="flex flex-col items-center">
-                      <div className="w-12 h-12 bg-brand-green/20 rounded-lg flex items-center justify-center mb-3">
-                        <i className="fa-solid fa-cloud-upload-alt text-brand-green text-xl"></i>
-                      </div>
-                      <p className="text-text-high font-medium mb-1">Drop files here or click to browse</p>
-                      <p className="text-text-muted text-xs">
-                        Accept: {doc.fileTypes} • Max 10MB {doc.months && doc.months.length > 1 ? 'per file' : ''}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Uploaded Files for this document type */}
-                  {getDocumentEvidence(evidence, doc).length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      {getDocumentEvidence(evidence, doc).map((item) => (
-                        <div key={item.id} className="flex items-center justify-between bg-brand-green/10 border border-brand-green/20 rounded-lg p-3">
-                          <div className="flex items-center space-x-3">
-                            <i className={`fa-solid ${doc.icon} text-brand-green`}></i>
-                            <div>
-                              <p className="text-sm text-text-high font-medium">{item.title}</p>
-                              <p className="text-xs text-text-muted">
-                                {item.file_size ? `${(item.file_size / 1024 / 1024).toFixed(2)} MB` : 'Uploaded'} • 
-                                {item.uploaded_at ? format(new Date(item.uploaded_at), 'MMM dd, HH:mm') : 'Just now'}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleRemoveEvidence(item.id)}
-                            className="w-8 h-8 rounded-lg bg-red-400/20 text-red-400 hover:bg-red-400/30 transition-colors flex items-center justify-center"
-                          >
-                            <i className="fa-solid fa-times text-sm"></i>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              ))}
-
-              {/* Other Evidence (unmatched files) */}
-              {(() => {
-                const matchedEvidenceIds = new Set();
-                requiredDocuments.forEach(doc => {
-                  getDocumentEvidence(evidence, doc).forEach(e => matchedEvidenceIds.add(e.id));
-                });
-                const unmatchedEvidence = evidence.filter(e => !matchedEvidenceIds.has(e.id));
+                  <span className="bg-brand-blue/20 text-brand-blue px-2 py-1 rounded text-xs">
+                    All file types accepted
+                  </span>
+                </div>
                 
-                return unmatchedEvidence.length > 0 && (
-                  <Card className="bg-white/5 border-white/10">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-2">
-                        <i className="fa-solid fa-paperclip text-text-muted"></i>
-                        <h4 className="text-sm font-medium text-text-high">Other Evidence</h4>
-                      </div>
-                      <span className="bg-gray-500/20 text-gray-300 px-2 py-1 rounded text-xs">
-                        {unmatchedEvidence.length} files
-                      </span>
+                <p className="text-sm text-text-muted mb-4">
+                  Upload all required evidence and supporting documents here. You can upload multiple files at once.
+                </p>
+
+                {/* Single Unified Drag and Drop Zone */}
+                <div
+                  className={`relative border-2 border-dashed rounded-lg p-8 transition-all duration-200 text-center ${
+                    dragActive
+                      ? 'border-brand-green bg-brand-green/10'
+                      : 'border-white/20 hover:border-brand-green/50 bg-white/5'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <input
+                    type="file"
+                    accept="*"
+                    multiple
+                    onChange={(e) => handleFileSelect(e, 'supporting_documents')}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <div className="flex flex-col items-center">
+                    <div className="w-12 h-12 bg-brand-green/20 rounded-lg flex items-center justify-center mb-3">
+                      <i className="fa-solid fa-cloud-upload-alt text-brand-green text-xl"></i>
                     </div>
-                    
-                    <div className="space-y-2">
-                      {unmatchedEvidence.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between bg-gray-500/10 border border-gray-500/20 rounded-lg p-3">
-                          <div className="flex items-center space-x-3">
-                            <i className="fa-solid fa-file text-gray-400"></i>
-                            <div>
-                              <p className="text-sm text-text-high font-medium">{item.title}</p>
-                              <p className="text-xs text-text-muted">
-                                {item.file_size ? `${(item.file_size / 1024 / 1024).toFixed(2)} MB` : 'Uploaded'} • 
-                                {item.uploaded_at ? format(new Date(item.uploaded_at), 'MMM dd, HH:mm') : 'Just now'}
-                              </p>
-                            </div>
+                    <p className="text-text-high font-medium mb-1">Drop files here or click to browse</p>
+                    <p className="text-text-muted text-xs">
+                      PDF, DOC, images, and all other file types • Max 10MB per file
+                    </p>
+                  </div>
+                </div>
+
+                {/* All Uploaded Files - No Classification */}
+                {evidence.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <h5 className="text-xs font-medium text-text-high flex items-center">
+                      <i className="fa-solid fa-paperclip mr-2"></i>
+                      Uploaded Files ({evidence.length})
+                    </h5>
+                    {evidence.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between bg-brand-green/10 border border-brand-green/20 rounded-lg p-3">
+                        <div className="flex items-center space-x-3">
+                          <i className="fa-solid fa-file text-brand-green"></i>
+                          <div>
+                            <p className="text-sm text-text-high font-medium">{item.title || item.original_filename}</p>
+                            <p className="text-xs text-text-muted">
+                              {item.file_size ? `${(item.file_size / 1024 / 1024).toFixed(2)} MB` : 'Uploaded'} • 
+                              {item.uploaded_at ? format(new Date(item.uploaded_at), 'MMM dd, HH:mm') : 'Just now'}
+                            </p>
                           </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <a
+                            href={`/api${item.file}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-brand-blue hover:text-brand-blue-light text-xs px-2 py-1 bg-brand-blue/20 rounded"
+                          >
+                            <i className="fa-solid fa-external-link mr-1"></i>
+                            View
+                          </a>
                           <button
                             onClick={() => handleRemoveEvidence(item.id)}
                             className="w-8 h-8 rounded-lg bg-red-400/20 text-red-400 hover:bg-red-400/30 transition-colors flex items-center justify-center"
@@ -1507,26 +1453,27 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                             <i className="fa-solid fa-times text-sm"></i>
                           </button>
                         </div>
-                      ))}
-                    </div>
-                  </Card>
-                );
-              })()}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
 
               {/* Upload Progress */}
               <Card className="bg-white/5 border-white/10">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-medium text-text-high">Upload Progress</span>
-                  <span className="text-sm text-brand-green font-medium">{Math.round(taskProgress)}%</span>
+                  <span className="text-sm text-brand-green font-medium">{calculateOverallProgress().fileProgress}%</span>
                 </div>
                 <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
                   <div 
                     className="h-2 rounded-full bg-gradient-to-r from-brand-green to-green-400 transition-all duration-500"
-                    style={{ width: `${taskProgress}%` }}
+                    style={{ width: `${calculateOverallProgress().fileProgress}%` }}
                   />
                 </div>
                 <p className="text-xs text-text-muted mt-2">
-                  {evidence.length} of {requiredDocuments.filter(d => d.required).length} required documents uploaded
+                  {evidence.length} files uploaded {requiredDocuments.filter(d => d.required).length > 0 ? `(${requiredDocuments.filter(d => d.required).length} required)` : ''}
                 </p>
               </Card>
             </div>
@@ -1628,7 +1575,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
         {/* Footer Actions */}
         <div className="flex items-center justify-between pt-6 border-t border-white/10">
           <div className="text-sm text-text-muted">
-            {evidence.length} of {requiredDocuments.filter(d => d.required).length} required files • Auto-save enabled
+            {evidence.length} files uploaded {requiredDocuments.filter(d => d.required).length > 0 ? `(${requiredDocuments.filter(d => d.required).length} required)` : ''} • Auto-save enabled
           </div>
           <div className="flex items-center space-x-3">
             <Button variant="outline" onClick={onClose}>
@@ -1639,6 +1586,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
               disabled={taskProgress < 100}
               onClick={() => {
                 if (taskProgress >= 100) {
+                  // Add to history
+                  addHistoryEntry('status_change', 'Task completed by user', {
+                    fromStatus: task.status,
+                    toStatus: 'completed',
+                    progress: taskProgress,
+                    completionMethod: 'manual'
+                  });
+                  
                   toast.success('Task completed successfully!');
                   onClose();
                 }

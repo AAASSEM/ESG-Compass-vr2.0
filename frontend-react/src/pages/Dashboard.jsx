@@ -88,8 +88,8 @@ const Dashboard = () => {
   );
 
   const { data: environmentalData, isLoading: environmentalLoading } = useQuery(
-    ['environmental-file-data', user?.id],
-    () => esgAPI.getEnvironmentalFileData(),
+    ['environmental-combined-data', user?.id],
+    () => esgAPI.getCombinedEnvironmentalData(),
     { 
       retry: 1, 
       staleTime: 0,
@@ -385,18 +385,40 @@ const Dashboard = () => {
 
   const currentCategoryData = React.useMemo(() => getCurrentCategoryData(), [selectedTab, socialData, environmentalData, governanceData]);
 
-  // Chart data for metrics using real extracted data or task progress
+  // Chart data for metrics using combined data (task entries + file data) or task progress
   const chartData = React.useMemo(() => {
-    const data = getCurrentCategoryData();
     let baseValue = 0;
 
-    // If we have file data with actual metrics, use it
-    if (data && data.files_analyzed > 0 && data[selectedMetric]) {
-      const metricValue = data[selectedMetric];
-      baseValue = typeof metricValue === 'number' ? metricValue : 0;
+    // For environmental data, use combined totals
+    if (selectedTab === 'environmental' && environmentalData?.combined_totals) {
+      const combinedTotals = environmentalData.combined_totals;
+      
+      // Map selected metrics to combined data fields
+      switch (selectedMetric) {
+        case 'energy_consumption':
+          baseValue = combinedTotals.energy_consumption_kwh || 0;
+          break;
+        case 'water_usage':
+          baseValue = Math.round((combinedTotals.water_usage_liters || 0) / 1000); // Convert to m³
+          break;
+        case 'waste_generated':
+          baseValue = combinedTotals.waste_generated || 0;
+          break;
+        case 'carbon_emissions':
+          baseValue = combinedTotals.carbon_emissions || 0;
+          break;
+        default:
+          baseValue = realProgress[selectedTab] || 0;
+      }
     } else {
-      // Otherwise use task completion progress as the base value
-      baseValue = realProgress[selectedTab] || 0;
+      // For other tabs, use original logic
+      const data = getCurrentCategoryData();
+      if (data && data.files_analyzed > 0 && data[selectedMetric]) {
+        const metricValue = data[selectedMetric];
+        baseValue = typeof metricValue === 'number' ? metricValue : 0;
+      } else {
+        baseValue = realProgress[selectedTab] || 0;
+      }
     }
     
     // Create trend data showing progression to current value
@@ -410,17 +432,38 @@ const Dashboard = () => {
     ];
   }, [selectedTab, selectedMetric, socialData, environmentalData, governanceData, realProgress]);
 
-  // Performance bar chart data using real data
+  // Performance bar chart data using combined data
   const performanceData = React.useMemo(() => {
-    const data = getCurrentCategoryData();
     let currentValue = 0;
 
-    // If we have file data with actual metrics, use it
-    if (data && data.files_analyzed > 0 && data[selectedMetric]) {
-      currentValue = typeof data[selectedMetric] === 'number' ? data[selectedMetric] : 0;
+    // For environmental data, use combined totals
+    if (selectedTab === 'environmental' && environmentalData?.combined_totals) {
+      const combinedTotals = environmentalData.combined_totals;
+      
+      switch (selectedMetric) {
+        case 'energy_consumption':
+          currentValue = combinedTotals.energy_consumption_kwh || 0;
+          break;
+        case 'water_usage':
+          currentValue = Math.round((combinedTotals.water_usage_liters || 0) / 1000);
+          break;
+        case 'waste_generated':
+          currentValue = combinedTotals.waste_generated || 0;
+          break;
+        case 'carbon_emissions':
+          currentValue = combinedTotals.carbon_emissions || 0;
+          break;
+        default:
+          currentValue = realProgress[selectedTab] || 0;
+      }
     } else {
-      // Otherwise use task completion progress
-      currentValue = realProgress[selectedTab] || 0;
+      // For other tabs, use original logic
+      const data = getCurrentCategoryData();
+      if (data && data.files_analyzed > 0 && data[selectedMetric]) {
+        currentValue = typeof data[selectedMetric] === 'number' ? data[selectedMetric] : 0;
+      } else {
+        currentValue = realProgress[selectedTab] || 0;
+      }
     }
     
     return [
@@ -453,12 +496,42 @@ const Dashboard = () => {
     }
     
     if (selectedTab === 'environmental') {
-      if (environmentalData?.files_analyzed > 0) {
+      // Use combined totals from both task data entries and file data
+      const combinedTotals = environmentalData?.combined_totals;
+      const hasTaskData = environmentalData?.task_entries?.data_entries_count > 0;
+      const hasFileData = environmentalData?.file_data?.files_analyzed > 0;
+      
+      if (hasTaskData || hasFileData) {
+        const dataSource = hasTaskData ? 'from data entries' : 'from uploaded files';
         return [
-          { name: 'Energy Consumption', value: environmentalData.energy_consumption ? `${environmentalData.energy_consumption} kWh` : '--', change: '0%', status: 'stable', description: 'from uploaded files' },
-          { name: 'Water Usage', value: environmentalData.water_usage ? `${environmentalData.water_usage} L` : '--', change: '0%', status: 'stable', description: 'total consumption' },
-          { name: 'Waste Generated', value: environmentalData.waste_generated ? `${environmentalData.waste_generated} kg` : '--', change: '0%', status: 'stable', description: 'waste output' },
-          { name: 'Carbon Emissions', value: environmentalData.carbon_emissions ? `${environmentalData.carbon_emissions} tCO2e` : '--', change: '0%', status: 'stable', description: 'total emissions' }
+          { 
+            name: 'Energy Consumption', 
+            value: combinedTotals?.energy_consumption_kwh ? `${combinedTotals.energy_consumption_kwh} kWh` : '--', 
+            change: '0%', 
+            status: 'stable', 
+            description: dataSource 
+          },
+          { 
+            name: 'Water Usage', 
+            value: combinedTotals?.water_usage_liters ? `${Math.round(combinedTotals.water_usage_liters)} L` : '--', 
+            change: '0%', 
+            status: 'stable', 
+            description: dataSource 
+          },
+          { 
+            name: 'Waste Generated', 
+            value: combinedTotals?.waste_generated ? `${combinedTotals.waste_generated} kg` : '--', 
+            change: '0%', 
+            status: 'stable', 
+            description: 'from files' 
+          },
+          { 
+            name: 'Carbon Emissions', 
+            value: combinedTotals?.carbon_emissions ? `${combinedTotals.carbon_emissions} tCO2e` : '--', 
+            change: '0%', 
+            status: 'stable', 
+            description: 'calculated' 
+          }
         ];
       } else {
         return [

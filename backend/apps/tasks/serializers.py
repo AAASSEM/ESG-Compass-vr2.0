@@ -83,7 +83,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'is_overdue', 'days_until_due', 'category_icon', 'priority_color',
             'created_by_name', 'created_at', 'updated_at', 'started_at',
             'completed_at', 'attachments', 'comments', 'progress_logs',
-            'attachment_count', 'comment_count', 'user_answer'
+            'attachment_count', 'comment_count', 'user_answer', 'data_entries', 'expected_files'
         ]
         read_only_fields = [
             'created_at', 'updated_at', 'started_at', 'completed_at',
@@ -233,7 +233,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         fields = [
             'title', 'description', 'task_type', 'category',
             'priority', 'assigned_to_id', 'due_date', 'estimated_hours',
-            'frameworks', 'compliance_context', 'action_required'
+            'frameworks', 'compliance_context', 'action_required', 'data_entries'
         ]
     
     def validate_due_date(self, value):
@@ -251,7 +251,7 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'title', 'description', 'status', 'priority', 'assigned_to',
             'due_date', 'estimated_hours', 'progress_percentage',
-            'completion_notes'
+            'completion_notes', 'data_entries'
         ]
     
     def update(self, instance, validated_data):

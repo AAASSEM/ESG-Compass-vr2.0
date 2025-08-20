@@ -1,0 +1,68 @@
+// Simple fix for getMetricsByCategory function in Tracker.jsx
+
+const getMetricsByCategory = (category) => {
+  if (!tasks || tasks.length === 0) {
+    return [{ name: 'No tasks available', status: 'pending' }];
+  }
+
+  const categoryTasks = tasks.filter(task => 
+    task.category === category || task.title.toLowerCase().includes(category.toLowerCase())
+  );
+
+  if (categoryTasks.length === 0) {
+    return [{ name: `No ${category} tasks`, status: 'pending' }];
+  }
+
+  // Show first 4 tasks with their actual progress
+  return categoryTasks.slice(0, 4).map(task => {
+    const taskText = `${task?.action_required || ''} ${task?.description || ''} ${task?.title || ''}`.toLowerCase();
+    
+    // Determine if task needs files or data
+    const needsFiles = taskText.includes('upload') || taskText.includes('bill') || 
+                      taskText.includes('document') || taskText.includes('photo');
+    const needsData = (taskText.includes('track') || taskText.includes('monitor') || 
+                      taskText.includes('meter')) && !taskText.includes('fuel') && !taskText.includes('cooling');
+    
+    let status = 'pending';
+    let evidenceCount = '';
+    
+    if (task.status === 'completed' || task.progress_percentage >= 100) {
+      status = 'complete';
+      evidenceCount = 'Completed';
+    } else if (task.status === 'in_progress' || task.progress_percentage > 0) {
+      status = 'in_progress';
+      
+      // Show what's been done
+      const attachments = (task.attachments || []).length;
+      const dataEntries = task.data_entries ? 
+        Object.keys(task.data_entries).filter(key => task.data_entries[key] && key !== 'notes').length : 0;
+      
+      if (needsFiles && needsData) {
+        evidenceCount = `${attachments} files, ${dataEntries} data`;
+      } else if (needsFiles) {
+        evidenceCount = `${attachments} files`;
+      } else if (needsData) {
+        evidenceCount = `${dataEntries} data entries`;
+      } else {
+        evidenceCount = `${Math.round(task.progress_percentage || 0)}%`;
+      }
+    } else {
+      // Pending - show what's needed
+      if (needsFiles && needsData) {
+        evidenceCount = 'Files & data needed';
+      } else if (needsFiles) {
+        evidenceCount = 'Files needed';
+      } else if (needsData) {
+        evidenceCount = 'Data needed';
+      } else {
+        evidenceCount = 'Not started';
+      }
+    }
+    
+    return {
+      name: task.title.length > 30 ? task.title.substring(0, 30) + '...' : task.title,
+      status: status,
+      evidence: evidenceCount
+    };
+  });
+};

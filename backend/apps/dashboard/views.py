@@ -145,6 +145,169 @@ def social_file_data(request):
     return Response(extracted_data)
 
 
+def _get_task_data_entries(company):
+    """
+    Extract consumption data from task data_entries field
+    """
+    # Get tasks with data entries
+    tasks_with_data = Task.objects.filter(
+        company=company,
+        data_entries__isnull=False
+    ).exclude(data_entries={})
+    
+    consumption_data = {
+        'energy_consumption_kwh': 0,
+        'water_usage_m3': 0,
+        'gas_usage_m3': 0,
+        'data_entries_count': 0,
+        'tasks_with_data': []
+    }
+    
+    total_energy = 0
+    total_water = 0 
+    total_gas = 0
+    entries_count = 0
+    
+    for task in tasks_with_data:
+        task_data = {
+            'title': task.title,
+            'entries': {}
+        }
+        
+        # Process each data entry
+        for key, value in task.data_entries.items():
+            if value and str(value).strip():  # Only count non-empty entries
+                entries_count += 1
+                task_data['entries'][key] = value
+                
+                # Parse meter readings
+                try:
+                    numeric_value = float(str(value).replace(',', ''))
+                    
+                    # Electricity meters (kWh)
+                    if ('elc' in key.lower() or 'electricity' in key.lower() or 
+                        'electric' in key.lower() or 'power' in key.lower()):
+                        total_energy += numeric_value
+                    
+                    # Water meters (m³)
+                    elif ('wat' in key.lower() or 'water' in key.lower() or 
+                          'hydro' in key.lower() or 'm3' in key.lower() or 'm³' in key.lower()):
+                        total_water += numeric_value
+                    
+                    # Gas meters (m³)
+                    elif ('gas' in key.lower() or 'lng' in key.lower() or 
+                          'natural' in key.lower()):
+                        total_gas += numeric_value
+                        
+                except (ValueError, TypeError):
+                    # Skip non-numeric values
+                    pass
+        
+        if task_data['entries']:
+            consumption_data['tasks_with_data'].append(task_data)
+    
+    consumption_data['energy_consumption_kwh'] = total_energy
+    consumption_data['water_usage_m3'] = total_water
+    consumption_data['gas_usage_m3'] = total_gas
+    consumption_data['data_entries_count'] = entries_count
+    
+    return consumption_data
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def combined_environmental_data(request):
+    """
+    Combined environmental data from both task data_entries and extracted files
+    """
+    company = request.user.company
+    if not company:
+        return Response({'error': 'No company associated with user'}, status=400)
+    
+    # Get data from task entries (meter readings)
+    task_data = _get_task_data_entries(company)
+    
+    # Get data from uploaded file analysis
+    environmental_extracted_data = ExtractedFileData.objects.filter(
+        task_attachment__task__company=company,
+        task_attachment__task__category__icontains='environmental',
+        processing_status='completed'
+    ).select_related('task_attachment__task')
+    
+    combined_data = {
+        # Task data entries (meter readings)
+        'task_entries': {
+            'energy_consumption_kwh': task_data['energy_consumption_kwh'],
+            'water_usage_m3': task_data['water_usage_m3'],
+            'gas_usage_m3': task_data['gas_usage_m3'],
+            'data_entries_count': task_data['data_entries_count'],
+            'tasks_with_data': task_data['tasks_with_data']
+        },
+        
+        # File extracted data
+        'file_data': {
+            'energy_consumption': None,
+            'water_usage': None,
+            'waste_generated': None,
+            'carbon_emissions': None,
+            'renewable_energy': None,
+            'files_analyzed': environmental_extracted_data.count()
+        },
+        
+        # Combined totals (task data + file data)
+        'combined_totals': {},
+        'data_source_priority': 'task_entries'  # Prefer task entries over file data
+    }
+    
+    # Process file data
+    if environmental_extracted_data.exists():
+        # Get latest values from files
+        latest_energy = environmental_extracted_data.exclude(
+            energy_consumption_kwh__isnull=True
+        ).order_by('-extraction_date').first()
+        if latest_energy:
+            combined_data['file_data']['energy_consumption'] = latest_energy.energy_consumption_kwh
+        
+        latest_water = environmental_extracted_data.exclude(
+            water_usage_liters__isnull=True
+        ).order_by('-extraction_date').first()
+        if latest_water:
+            combined_data['file_data']['water_usage'] = latest_water.water_usage_liters
+        
+        latest_waste = environmental_extracted_data.exclude(
+            waste_generated_kg__isnull=True
+        ).order_by('-extraction_date').first()
+        if latest_waste:
+            combined_data['file_data']['waste_generated'] = latest_waste.waste_generated_kg
+        
+        latest_carbon = environmental_extracted_data.exclude(
+            carbon_emissions_tco2__isnull=True
+        ).order_by('-extraction_date').first()
+        if latest_carbon:
+            combined_data['file_data']['carbon_emissions'] = latest_carbon.carbon_emissions_tco2
+    
+    # Calculate combined totals (prefer task data when available)
+    combined_data['combined_totals'] = {
+        'energy_consumption_kwh': (
+            task_data['energy_consumption_kwh'] if task_data['energy_consumption_kwh'] > 0 
+            else combined_data['file_data']['energy_consumption'] or 0
+        ),
+        'water_usage_liters': (
+            task_data['water_usage_m3'] * 1000 if task_data['water_usage_m3'] > 0  # Convert m³ to liters
+            else combined_data['file_data']['water_usage'] or 0
+        ),
+        'waste_generated': combined_data['file_data']['waste_generated'] or 0,
+        'carbon_emissions': combined_data['file_data']['carbon_emissions'] or 0,
+        'data_completeness': {
+            'has_task_data': task_data['data_entries_count'] > 0,
+            'has_file_data': environmental_extracted_data.count() > 0,
+            'total_data_points': task_data['data_entries_count'] + environmental_extracted_data.count()
+        }
+    }
+    
+    return Response(combined_data)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def environmental_file_data(request):

@@ -35,13 +35,15 @@ const Login = () => {
     }
   };
 
-  const handleDemoLogin = () => {
+  const handleDemoLogin = async () => {
     setIsLoading(true);
     try {
-      const result = loginDemo();
+      const result = await loginDemo();
       if (result.success) {
-        toast.success('Demo mode activated!');
+        toast.success('Demo mode activated! Full database populated.');
         navigate('/dashboard');
+      } else {
+        toast.error(result.error || 'Demo login failed');
       }
     } catch (error) {
       toast.error('Demo login failed');

@@ -6,6 +6,7 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 
 const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = false, onNextStep }) => {
+  const [isEditing, setIsEditing] = useState(false);
   const createNewLocation = () => ({
     id: `loc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     name: '',
@@ -86,6 +87,12 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
     setLocations(newLocations);
   };
 
+  const removeMeter = (locationIndex, meterIndex) => {
+    const newLocations = [...locations];
+    newLocations[locationIndex].meters.splice(meterIndex, 1);
+    setLocations(newLocations);
+  };
+
   const updateMeter = (locationIndex, meterIndex, field, value) => {
     const newLocations = [...locations];
     const updates = { [field]: value };
@@ -108,12 +115,6 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
     setLocations(newLocations);
   };
 
-  const removeMeter = (locationIndex, meterIndex) => {
-    const newLocations = [...locations];
-    newLocations[locationIndex].meters.splice(meterIndex, 1);
-    setLocations(newLocations);
-  };
-
   const validateLocations = () => {
     for (let i = 0; i < locations.length; i++) {
       const location = locations[i];
@@ -126,10 +127,35 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
   };
 
   const handleComplete = () => {
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
     if (validateLocations()) {
       console.log('Locations completed:', locations);
       onComplete(locations);
     }
+  };
+
+  const handleEditToggle = () => {
+    setIsEditing(!isEditing);
+  };
+
+  const handleSave = () => {
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    if (validateLocations()) {
+      setIsEditing(false);
+      onComplete(locations);
+    }
+  };
+
+  const handleCancel = () => {
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    setIsEditing(false);
+    setLocations(initialData);
   };
 
   // Save to localStorage whenever locations change
@@ -142,6 +168,14 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
   return (
     <Card className="max-w-6xl mx-auto">
       <div className="space-y-8">
+        {isViewMode && !isEditing && (
+          <div className="flex justify-end">
+            <Button onClick={handleEditToggle}>
+              <i className="fas fa-edit mr-2"></i>
+              Edit Locations
+            </Button>
+          </div>
+        )}
         <div className="text-center space-y-2">
           <h2 className="text-text-high font-bold text-2xl flex items-center justify-center">
             <i className="fa-solid fa-map-marker-alt mr-3 text-brand-blue"></i>
@@ -159,7 +193,7 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                 <h3 className="text-text-high font-semibold text-lg">
                   Location {locationIndex + 1}
                 </h3>
-                {locations.length > 1 && !isViewMode && (
+                {locations.length > 1 && (!isViewMode || isEditing) && (
                   <Button
                     variant="danger"
                     size="small"
@@ -177,8 +211,8 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                   placeholder="e.g., Main Office, Warehouse 1"
                   value={location.name}
                   onChange={(e) => updateLocation(locationIndex, 'name', e.target.value)}
-                  required={!isViewMode}
-                  disabled={isViewMode}
+                  required={!isViewMode || isEditing}
+                  disabled={isViewMode && !isEditing}
                 />
 
                 <Input
@@ -186,8 +220,8 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                   placeholder="Full street address"
                   value={location.address}
                   onChange={(e) => updateLocation(locationIndex, 'address', e.target.value)}
-                  required={!isViewMode}
-                  disabled={isViewMode}
+                  required={!isViewMode || isEditing}
+                  disabled={isViewMode && !isEditing}
                 />
 
                 <Select
@@ -195,8 +229,8 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                   options={emirateOptions}
                   value={location.emirate}
                   onChange={(e) => updateLocation(locationIndex, 'emirate', e.target.value)}
-                  required={!isViewMode}
-                  disabled={isViewMode}
+                  required={!isViewMode || isEditing}
+                  disabled={isViewMode && !isEditing}
                 />
 
                 <Select
@@ -204,7 +238,7 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                   options={buildingTypeOptions}
                   value={location.buildingType}
                   onChange={(e) => updateLocation(locationIndex, 'buildingType', e.target.value)}
-                  disabled={isViewMode}
+                  disabled={isViewMode && !isEditing}
                 />
 
                 <Input
@@ -213,7 +247,7 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                   placeholder="Enter floor area"
                   value={location.totalFloorArea}
                   onChange={(e) => updateLocation(locationIndex, 'totalFloorArea', e.target.value)}
-                  disabled={isViewMode}
+                  disabled={isViewMode && !isEditing}
                 />
 
                 <Input
@@ -222,7 +256,7 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                   placeholder="Enter number of floors"
                   value={location.numberOfFloors}
                   onChange={(e) => updateLocation(locationIndex, 'numberOfFloors', e.target.value === '' ? '' : parseInt(e.target.value) || 1)}
-                  disabled={isViewMode}
+                  disabled={isViewMode && !isEditing}
                 />
 
                 <Select
@@ -230,7 +264,7 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                   options={ownershipTypeOptions}
                   value={location.ownershipType}
                   onChange={(e) => updateLocation(locationIndex, 'ownershipType', e.target.value)}
-                  disabled={isViewMode}
+                  disabled={isViewMode && !isEditing}
                 />
               </div>
 
@@ -238,11 +272,12 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <h4 className="text-text-high font-medium">Utility Meters</h4>
-                  {!isViewMode && (
+                  {(!isViewMode || isEditing) && (
                     <Button
                       variant="secondary"
                       size="small"
                       onClick={() => addMeter(locationIndex)}
+                      disabled={isViewMode && !isEditing}
                     >
                       <i className="fas fa-plus mr-1"></i>
                       Add Meter
@@ -256,11 +291,12 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                       <h5 className="text-text-high font-medium text-sm">
                         Meter {meterIndex + 1}
                       </h5>
-                      {!isViewMode && (
+                      {(!isViewMode || isEditing) && (
                         <Button
                           variant="ghost"
                           size="small"
                           onClick={() => removeMeter(locationIndex, meterIndex)}
+                          disabled={isViewMode && !isEditing}
                         >
                           <i className="fas fa-times"></i>
                         </Button>
@@ -273,7 +309,7 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                         options={meterTypeOptions}
                         value={meter.type}
                         onChange={(e) => updateMeter(locationIndex, meterIndex, 'type', e.target.value)}
-                        disabled={isViewMode}
+                        disabled={isViewMode && !isEditing}
                       />
 
                       <Input
@@ -281,7 +317,7 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                         placeholder="e.g., Main electricity meter"
                         value={meter.description}
                         onChange={(e) => updateMeter(locationIndex, meterIndex, 'description', e.target.value)}
-                        disabled={isViewMode}
+                        disabled={isViewMode && !isEditing}
                       />
 
                       <Input
@@ -289,7 +325,7 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                         placeholder="Physical meter number"
                         value={meter.meterNumber}
                         onChange={(e) => updateMeter(locationIndex, meterIndex, 'meterNumber', e.target.value)}
-                        disabled={isViewMode}
+                        disabled={isViewMode && !isEditing}
                       />
 
                       <Input
@@ -297,7 +333,7 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
                         placeholder="e.g., DEWA, ADDC"
                         value={meter.provider}
                         onChange={(e) => updateMeter(locationIndex, meterIndex, 'provider', e.target.value)}
-                        disabled={isViewMode}
+                        disabled={isViewMode && !isEditing}
                       />
                     </div>
                   </div>
@@ -316,38 +352,51 @@ const LocationsStep = ({ onComplete, onBack, initialData = [], isViewMode = fals
           ))}
         </div>
 
-        {!isViewMode && (
+        {!isViewMode || isEditing ? (
           <div className="flex justify-center">
             <Button
               variant="outline"
               onClick={addLocation}
               className="mb-6"
+              disabled={isViewMode && !isEditing}
             >
               <i className="fas fa-plus mr-2"></i>
               Add Another Location
             </Button>
           </div>
-        )}
+        ) : null}
 
         <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-white/10">
           <Button
             variant="outline"
             size="large"
-            onClick={onBack}
+            onClick={isViewMode && isEditing ? handleCancel : () => { window.scrollTo({ top: 0, behavior: 'smooth' }); onBack(); }}
           >
-            <i className="fas fa-arrow-left mr-2"></i>
-            {isViewMode ? 'View Business Info' : 'Back'}
+            <i className={`fas ${isViewMode && isEditing ? 'fa-times' : 'fa-arrow-left'} mr-2`}></i>
+            {isViewMode ? (isEditing ? 'Cancel' : 'View Business Info') : 'Back'}
           </Button>
           
-          <Button
-            variant="primary"
-            size="large"
-            onClick={isViewMode ? onNextStep : handleComplete}
-            className="flex-1"
-          >
-            {isViewMode ? 'View ESG Assessment' : 'Continue to ESG Assessment'}
-            <i className="fas fa-arrow-right ml-2"></i>
-          </Button>
+          {isViewMode && isEditing ? (
+            <Button
+              variant="primary"
+              size="large"
+              onClick={handleSave}
+              className="flex-1"
+            >
+              Save Changes
+              <i className="fas fa-save ml-2"></i>
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              size="large"
+              onClick={isViewMode ? () => { window.scrollTo({ top: 0, behavior: 'smooth' }); onNextStep(); } : handleComplete}
+              className="flex-1"
+            >
+              {isViewMode ? 'View ESG Assessment' : 'Continue to ESG Assessment'}
+              <i className="fas fa-arrow-right ml-2"></i>
+            </Button>
+          )}
         </div>
 
         <div className="bg-white/5 rounded-xl p-4 border border-white/10">
