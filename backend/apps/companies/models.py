@@ -138,10 +138,120 @@ class Company(models.Model):
         return self.users.count()
     
     def update_esg_scores(self):
-        """Update ESG scores based on completed tasks and data"""
-        # This would be implemented based on your ESG calculation logic
-        # For now, return placeholder values
-        pass
+        """Update ESG scores based on actual data entries and file uploads"""
+        from apps.tasks.models import Task, TaskAttachment
+        from django.db.models import Count
+        from apps.dashboard.views import _get_task_data_entries
+        
+        # Get all tasks for this company
+        all_tasks = Task.objects.filter(company=self)
+        
+        if not all_tasks.exists():
+            # No tasks yet, set to default scores
+            self.environmental_score = 0.0
+            self.social_score = 0.0
+            self.governance_score = 0.0
+            self.overall_esg_score = 0.0
+            self.save(update_fields=['environmental_score', 'social_score', 'governance_score', 'overall_esg_score'])
+            return
+        
+        # Get actual data entries and file uploads
+        task_data = _get_task_data_entries(self)
+        
+        # Calculate Environmental Score based on actual data
+        env_tasks = all_tasks.filter(category__icontains='environmental')
+        env_score = self._calculate_data_based_score(env_tasks, task_data, 'environmental')
+        
+        # Calculate Social Score based on actual data
+        social_tasks = all_tasks.filter(category__icontains='social')
+        social_score = self._calculate_data_based_score(social_tasks, task_data, 'social')
+        
+        # Calculate Governance Score based on actual data
+        gov_tasks = all_tasks.filter(category__icontains='governance') 
+        gov_score = self._calculate_data_based_score(gov_tasks, task_data, 'governance')
+        
+        # Calculate Overall Score (weighted average)
+        # Environmental: 40%, Social: 30%, Governance: 30%
+        overall_score = (env_score * 0.4) + (social_score * 0.3) + (gov_score * 0.3)
+        
+        # Update the scores
+        self.environmental_score = round(env_score, 1)
+        self.social_score = round(social_score, 1)
+        self.governance_score = round(gov_score, 1)
+        self.overall_esg_score = round(overall_score, 1)
+        
+        # Save without triggering signals to avoid recursion
+        self.save(update_fields=['environmental_score', 'social_score', 'governance_score', 'overall_esg_score'])
+        
+        print(f"🔄 Updated ESG scores for {self.name} based on data entries:")
+        print(f"   Environmental: {self.environmental_score}")
+        print(f"   Social: {self.social_score}")
+        print(f"   Governance: {self.governance_score}")
+        print(f"   Overall: {self.overall_esg_score}")
+    
+    def _calculate_data_based_score(self, tasks, task_data, category):
+        """Calculate ESG score based on actual data entries and file uploads"""
+        if not tasks.exists():
+            return 0.0  # No tasks = no score
+        
+        total_score = 0.0
+        total_tasks = tasks.count()
+        
+        # Score based on data entries per task
+        for task in tasks:
+            task_score = 0.0
+            
+            # Points for data entries (50% of task score)
+            data_entries = task.data_entries or {}
+            if data_entries:
+                # Each data entry field gives points
+                data_fields = len([v for v in data_entries.values() if v and str(v).strip()])
+                if data_fields > 0:
+                    task_score += min(50, data_fields * 10)  # Up to 50 points for data
+            
+            # Points for file uploads (50% of task score)
+            file_count = task.attachments.count()
+            if file_count > 0:
+                task_score += min(50, file_count * 15)  # Up to 50 points for files
+            
+            total_score += task_score
+        
+        # Average score per task, then scale to 0-100
+        if total_tasks > 0:
+            avg_score = total_score / total_tasks
+            final_score = min(100, avg_score)
+        else:
+            final_score = 0.0
+        
+        # Bonus for having actual meter data (environmental category only)
+        if category == 'environmental':
+            energy_data = task_data.get('energy_consumption_kwh', 0)
+            water_data = task_data.get('water_usage_m3', 0)
+            gas_data = task_data.get('gas_usage_m3', 0)
+            
+            if energy_data > 0 or water_data > 0 or gas_data > 0:
+                final_score = min(100, final_score + 15)  # 15 point bonus for real meter data
+        
+        return final_score
+    
+    def _calculate_data_boost(self, task_data):
+        """Calculate bonus points for having real meter data entries"""
+        data_points = task_data.get('data_entries_count', 0)
+        energy_data = task_data.get('energy_consumption_kwh', 0)
+        water_data = task_data.get('water_usage_m3', 0)
+        gas_data = task_data.get('gas_usage_m3', 0)
+        
+        boost = 0
+        
+        # Bonus for number of data entries (up to 10 points)
+        if data_points > 0:
+            boost += min(10, data_points * 2)
+        
+        # Bonus for actual consumption data (up to 10 points)
+        if energy_data > 0 or water_data > 0 or gas_data > 0:
+            boost += 10
+        
+        return boost
     
     def update_progress_metrics(self):
         """Update progress tracking metrics"""

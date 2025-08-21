@@ -98,6 +98,11 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
       // Parse required data fields
       const fields = extractDataFields(task);
       setDataFields(fields);
+
+      // If on data-entry tab but no data fields, switch to overview
+      if (activeTab === 'data-entry' && fields.filter(f => f.key !== 'notes').length === 0) {
+        setActiveTab('overview');
+      }
       
       // Initialize data entries
       const entries = {};
@@ -311,6 +316,19 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
         previousValue: previousValue || 'Empty'
       });
     }
+
+    // Auto-save this specific field after 1 second delay
+    if (!window.autoSaveTimeouts) {
+      window.autoSaveTimeouts = {};
+    }
+    
+    if (window.autoSaveTimeouts[field]) {
+      clearTimeout(window.autoSaveTimeouts[field]);
+    }
+    
+    window.autoSaveTimeouts[field] = setTimeout(() => {
+      saveDataEntry(field, value);
+    }, 1000);
   };
 
   const saveDataEntry = async (field, value) => {
@@ -734,7 +752,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
         answerText = String(task.user_answer);
       }
       
-      return `${cleanTitle} - Your answer: ✓ ${answerText}`;
+      return `${cleanTitle} (Answer: ${answerText})`;
     }
     
     return cleanTitle;
@@ -897,7 +915,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
             )}
           </button>
           
-          {dataFields.length > 0 && (
+          {dataFields.filter(f => f.key !== 'notes').length > 0 && (
             <button
               onClick={() => setActiveTab('data-entry')}
               className={`px-4 py-2 text-sm font-medium transition-colors relative ${
@@ -910,7 +928,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                 <i className="fa-solid fa-keyboard"></i>
                 <span>Data Entry</span>
                 <span className="bg-white/10 px-2 py-0.5 rounded-full text-xs">
-                  {dataFields.filter(f => f.required).length}
+                  {dataFields.filter(f => f.required && f.key !== 'notes').length}
                 </span>
               </span>
               {activeTab === 'data-entry' && (
@@ -1193,30 +1211,11 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate }) => {
                 </Card>
               )}
 
-              {/* Quick Actions */}
-              <div className="flex flex-wrap gap-3">
-                {dataFields.length > 0 && (
-                  <button
-                    onClick={() => setActiveTab('data-entry')}
-                    className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-text-high hover:bg-white/10 transition-colors flex items-center"
-                  >
-                    <i className="fa-solid fa-keyboard mr-2"></i>
-                    Enter Data
-                  </button>
-                )}
-                <button
-                  onClick={() => setActiveTab('evidence')}
-                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-text-high hover:bg-white/10 transition-colors flex items-center"
-                >
-                  <i className="fa-solid fa-upload mr-2"></i>
-                  Upload Evidence
-                </button>
-              </div>
             </div>
           )}
 
           {/* Data Entry Tab */}
-          {activeTab === 'data-entry' && (
+          {activeTab === 'data-entry' && dataFields.filter(f => f.key !== 'notes').length > 0 && (
             <div className="space-y-6">
               <div className="text-lg font-medium text-text-high mb-4 flex items-center">
                 <i className="fa-solid fa-chart-line mr-2 text-brand-green"></i>

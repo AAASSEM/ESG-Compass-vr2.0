@@ -374,23 +374,23 @@ export const extractRequiredDocuments = (task) => {
   const meterInfo = getMeterInfo(task);
   const isMetersTask = text.includes('bill') || text.includes('invoice') || text.includes('meter') || text.includes('consumption');
   
-  // Bills/Invoices - Create one document requirement per meter that needs bills
+  // Bills/Invoices - Create one document requirement per meter
   if (isMetersTask && meterInfo && meterInfo.length > 0) {
-    const metersRequiringBills = meterInfo.filter(meter => meter.bills_required);
-    
-    metersRequiringBills.forEach((meter, index) => {
-      const months = extractRequiredMonths(task);
-      documents.push({
-        key: `bills_${meter.meter_id || meter.id}`,
-        title: 'Supporting Documents',
-        description: `Upload ${months.length} month${months.length > 1 ? 's' : ''} of ${meter.type} bills (${meter.meter_id || meter.id})`,
-        fileTypes: '.pdf,.jpg,.jpeg,.png',
-        icon: 'fa-file-text',
-        color: 'blue',
-        required: true,
-        months: months,
-        meter: meter
-      });
+    // Create one file upload requirement per meter (1:1 ratio with data entries)
+    meterInfo.forEach((meter, index) => {
+      // Only require bills for meters that would have data entry requirements
+      if (meter.reading_required) {
+        documents.push({
+          key: `bills_${meter.meter_id || meter.id}`,
+          title: 'Supporting Documents',
+          description: `Upload ${meter.type} bill/invoice for meter ${meter.meter_id || meter.id}`,
+          fileTypes: '.pdf,.jpg,.jpeg,.png',
+          icon: 'fa-file-text',
+          color: 'blue',
+          required: true,
+          meter: meter
+        });
+      }
     });
   } else if (text.includes('bill') || text.includes('invoice')) {
     // Fallback for non-meter bill tasks
